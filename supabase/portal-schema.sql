@@ -23,14 +23,27 @@ create table if not exists public.profiles (
   full_name text,
   email text,
   role text not null default 'client' check (role in ('client', 'employee', 'admin')),
-  status text not null default 'active' check (status in ('active', 'disabled')),
+  status text not null default 'active' check (status in ('pending', 'active', 'suspended', 'disabled')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
+-- Upgrading from an earlier version of this file: widen the status values
+-- to support the employee-invitation lifecycle (pending → active →
+-- suspended/disabled). No-op on a fresh install.
+do $$
+begin
+  if to_regclass('public.profiles') is not null then
+    alter table public.profiles drop constraint if exists profiles_status_check;
+    alter table public.profiles add constraint profiles_status_check
+      check (status in ('pending', 'active', 'suspended', 'disabled'));
+  end if;
+end $$;
+
 -- Every new signup becomes a 'client' automatically. Employees/admins are
--- never created by signing up — an admin promotes an existing client
--- profile from the Admin Portal instead (see profiles UPDATE policy below).
+-- never created by signing up — an admin either invites them by email
+-- (see section 12, employee_invitations) or promotes an existing client
+-- profile from the Admin Portal (see profiles UPDATE policy below).
 create or replace function public.handle_new_user()
 returns trigger as $$
 begin
@@ -59,22 +72,38 @@ returns text as $$
   select role from public.profiles where id = auth.uid();
 $$ language sql stable security definer set search_path = public;
 
+-- Staff/admin status must also be 'active' — an invited employee who
+-- hasn't been activated yet (status = 'pending'), or one an admin has
+-- suspended/disabled, has role = 'employee' but NO staff privileges at
+-- all until an admin flips them back to active. This is enforced here,
+-- not just hidden in the UI.
 create or replace function public.is_staff()
 returns boolean as $$
-  select coalesce(public.current_role() in ('employee', 'admin'), false);
+  select exists (
+    select 1 from public.profiles
+    where id = auth.uid() and role in ('employee', 'admin') and status = 'active'
+  );
 $$ language sql stable security definer set search_path = public;
 
 create or replace function public.is_admin()
 returns boolean as $$
-  select coalesce(public.current_role() = 'admin', false);
+  select exists (
+    select 1 from public.profiles
+    where id = auth.uid() and role = 'admin' and status = 'active'
+  );
 $$ language sql stable security definer set search_path = public;
 
 -- Only admins may change role/status on any profile (own or someone else's).
 -- Everyone (including staff) may still edit their own full_name.
+--
+-- The one exception is accept_employee_invitation() (section 12): a
+-- brand-new employee accepting an invite isn't an admin yet, so that
+-- SECURITY DEFINER function briefly sets app.bypass_privilege_check to
+-- let its own role/status change through. Nothing else can set that flag.
 create or replace function public.protect_profile_privileges()
 returns trigger as $$
 begin
-  if not public.is_admin() then
+  if not public.is_admin() and coalesce(current_setting('app.bypass_privilege_check', true), 'false') <> 'true' then
     if new.role is distinct from old.role then
       raise exception 'Only administrators can change account roles';
     end if;
@@ -158,6 +187,27 @@ drop trigger if exists protect_application_fields_trigger on public.applications
 create trigger protect_application_fields_trigger
   before update on public.applications
   for each row execute function public.protect_application_fields();
+
+-- Backfill, now that both triggers above exist: anyone who signed up
+-- before this migration ran (auth.users → profiles → applications, each
+-- step driven by an AFTER INSERT trigger) needs their profiles row
+-- created first, which then drives the applications row via the trigger
+-- just above. Safe to re-run — only ever inserts rows that are missing.
+insert into public.profiles (id, full_name, email, role)
+select
+  u.id,
+  coalesce(u.raw_user_meta_data->>'full_name', u.raw_user_meta_data->>'first_name', u.email),
+  u.email,
+  'client'
+from auth.users u
+left join public.profiles p on p.id = u.id
+where p.id is null;
+
+insert into public.applications (client_id, status)
+select p.id, 'documents_incomplete'
+from public.profiles p
+left join public.applications a on a.client_id = p.id
+where p.role = 'client' and a.id is null;
 
 alter table public.applications enable row level security;
 
@@ -542,7 +592,142 @@ end $$;
 
 
 -- ============================================================================
--- 11. Bootstrap your first Administrator — RUN THIS LAST
+-- 11. employee_invitations — how staff accounts actually get created
+-- ============================================================================
+-- There is no "sign up as an employee" path anywhere in this system. The
+-- only way a profile becomes staff is: an admin creates an invitation row
+-- here → the invitee visits accept-invite.html with the token → they set
+-- a password → accept_employee_invitation() promotes their profile, but
+-- leaves it status = 'pending' until an admin explicitly activates it.
+create extension if not exists pgcrypto;
+
+create table if not exists public.employee_invitations (
+  id uuid primary key default gen_random_uuid(),
+  email text not null,
+  role text not null default 'employee' check (role in ('employee', 'admin')),
+  token text not null unique default encode(gen_random_bytes(24), 'hex'),
+  status text not null default 'pending' check (status in ('pending', 'accepted', 'revoked')),
+  invited_by uuid references public.profiles(id),
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null default (now() + interval '7 days'),
+  accepted_at timestamptz
+);
+
+alter table public.employee_invitations enable row level security;
+
+-- Only admins can see, create, or revoke invitations. There is deliberately
+-- no policy that lets an anonymous visitor SELECT this table (that would
+-- leak every invited email address) — accept-invite.html instead calls
+-- get_invitation_by_token() below, which returns only the one matching row.
+drop policy if exists "employee_invitations_select" on public.employee_invitations;
+create policy "employee_invitations_select"
+  on public.employee_invitations for select
+  using (public.is_admin());
+
+drop policy if exists "employee_invitations_insert" on public.employee_invitations;
+create policy "employee_invitations_insert"
+  on public.employee_invitations for insert
+  with check (public.is_admin() and invited_by = auth.uid());
+
+drop policy if exists "employee_invitations_update" on public.employee_invitations;
+create policy "employee_invitations_update"
+  on public.employee_invitations for update
+  using (public.is_admin())
+  with check (public.is_admin());
+
+create or replace function public.log_invitation_created()
+returns trigger as $$
+declare
+  actor_name text;
+begin
+  select full_name into actor_name from public.profiles where id = auth.uid();
+  insert into public.audit_logs (actor_id, actor_name, action, field_changed, new_value)
+  values (auth.uid(), actor_name, 'Invited employee', 'invitation', new.email || ' as ' || new.role);
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+drop trigger if exists log_invitation_created_trigger on public.employee_invitations;
+create trigger log_invitation_created_trigger
+  after insert on public.employee_invitations
+  for each row execute function public.log_invitation_created();
+
+do $$
+begin
+  alter publication supabase_realtime add table public.employee_invitations;
+exception when duplicate_object then null;
+end $$;
+
+-- Callable by anyone (even signed out) so the accept-invite page can show
+-- "You're invited to join as Employee" before the visitor has an account.
+-- Returns only what's needed to render that screen — never the whole table.
+create or replace function public.get_invitation_by_token(p_token text)
+returns jsonb as $$
+declare
+  inv record;
+begin
+  select email, role, status, expires_at into inv
+  from public.employee_invitations where token = p_token;
+
+  if inv is null then
+    return jsonb_build_object('valid', false, 'reason', 'not_found');
+  end if;
+  if inv.status <> 'pending' then
+    return jsonb_build_object('valid', false, 'reason', 'already_used');
+  end if;
+  if inv.expires_at < now() then
+    return jsonb_build_object('valid', false, 'reason', 'expired');
+  end if;
+
+  return jsonb_build_object('valid', true, 'email', inv.email, 'role', inv.role);
+end;
+$$ language plpgsql security definer set search_path = public;
+
+grant execute on function public.get_invitation_by_token(text) to anon, authenticated;
+
+-- Called once the invitee is signed in (either just signed up, or signed
+-- in with an existing account matching the invited email). Promotes their
+-- profile to the invited role but leaves status = 'pending' — an admin
+-- still has to activate the account before is_staff()/is_admin() will
+-- ever return true for them.
+create or replace function public.accept_employee_invitation(p_token text)
+returns jsonb as $$
+declare
+  inv record;
+  uid uuid := auth.uid();
+  invitee_email text;
+begin
+  if uid is null then
+    raise exception 'You must be signed in to accept an invitation';
+  end if;
+
+  select * into inv from public.employee_invitations
+  where token = p_token and status = 'pending' and expires_at > now();
+
+  if inv is null then
+    raise exception 'This invitation is invalid or has expired';
+  end if;
+
+  select email into invitee_email from auth.users where id = uid;
+  if invitee_email is null or lower(invitee_email) <> lower(inv.email) then
+    raise exception 'This invitation was sent to a different email address';
+  end if;
+
+  perform set_config('app.bypass_privilege_check', 'true', true);
+  update public.profiles set role = inv.role, status = 'pending' where id = uid;
+  perform set_config('app.bypass_privilege_check', 'false', true);
+
+  update public.employee_invitations set status = 'accepted', accepted_at = now() where id = inv.id;
+
+  return jsonb_build_object('role', inv.role);
+end;
+$$ language plpgsql security definer set search_path = public;
+
+grant execute on function public.accept_employee_invitation(text) to authenticated;
+
+
+-- ============================================================================
+-- 12. Bootstrap your first Administrator — RUN THIS LAST
 -- ============================================================================
 -- Steps:
 --   1. Sign up for a normal account on the live site first (this creates
@@ -553,3 +738,8 @@ end $$;
 -- door in, and it requires direct SQL access to your own Supabase project.
 --
 -- update public.profiles set role = 'admin' where email = 'you@example.com';
+
+-- Pre-filled for this project's first admin (you already signed up with
+-- this address, so the backfill in section 2 will have created your
+-- profiles row by the time you run this):
+update public.profiles set role = 'admin', status = 'active' where email = 'kerwingemaoll@gmail.com';

@@ -96,8 +96,35 @@
         <!-- ==================== EMPLOYEES (admin only) ==================== -->
         <section class="staff-panel" data-panel="employees">
           <div class="staff-card">
-            <h2>Promote a Client to Staff</h2>
-            <p class="portal-hint">The person must already have a Calestia account (they sign up like any client). Search for them below, then assign a role.</p>
+            <h2>Invite an Employee</h2>
+            <p class="portal-hint">Nobody can register as staff on their own. Invite by email below — they'll set their own password, but the account stays Pending until you activate it here.</p>
+            <form class="staff-invite-form" id="inviteEmployeeForm">
+              <input type="email" id="inviteEmail" placeholder="employee@email.com" required aria-label="Employee email" />
+              <select id="inviteRole" aria-label="Role to invite as">
+                <option value="employee">Employee</option>
+                <option value="admin">Administrator</option>
+              </select>
+              <button type="submit" class="btn-primary" style="padding:12px 22px;">Send Invite</button>
+            </form>
+            <p class="portal-hint" id="emailNotConfiguredNote">No email sending is configured yet, so each invite generates a link you copy and send yourself (WhatsApp, email, however you reach your team).</p>
+          </div>
+
+          <div class="staff-card">
+            <h2>Pending Invitations</h2>
+            <div class="staff-table-wrap">
+              <table class="staff-table">
+                <thead>
+                  <tr><th>Email</th><th>Role</th><th>Sent</th><th>Expires</th><th>Actions</th></tr>
+                </thead>
+                <tbody id="invitationsTableBody">
+                  <tr><td colspan="5" class="portal-hint">Loading invitations…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="staff-card">
+            <h2>Accounts</h2>
             <div class="staff-toolbar">
               <input type="text" id="employeeSearch" placeholder="Search all accounts by name or email…" aria-label="Search accounts" />
             </div>

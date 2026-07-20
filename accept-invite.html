@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Calestia Travel &amp; Tours</title>
+  <meta name="description" content="Accept your staff invitation to Calestia Travel & Tours." />
+  <meta name="robots" content="noindex" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" type="image/png" href="assets/images/calestia-logo.png" />
+</head>
+<body>
+
+  <nav id="navbar">
+    <a href="index.html" class="nav-logo">
+      <img src="assets/images/calestia-logo.png" alt="Calestia logo" class="logo-icon" />
+      <span>Calestia Travel &amp; Tours</span>
+    </a>
+  </nav>
+
+  <main class="reset-wrap">
+    <div class="reset-card" id="inviteCard">
+      <div class="auth-brand">
+        <img src="assets/images/calestia-logo.png" alt="" class="auth-logo" />
+        <span>Calestia Travel &amp; Tours</span>
+      </div>
+
+      <div id="inviteLoading">
+        <h2 class="auth-title">Checking your invitation…</h2>
+      </div>
+
+      <div id="inviteInvalid" class="is-hidden">
+        <h2 class="auth-title">This invitation isn't valid</h2>
+        <p class="auth-sub" id="inviteInvalidReason">It may have expired or already been used. Ask your administrator to send a new one.</p>
+        <a href="index.html" class="btn-primary" style="width:100%; justify-content:center;">Back to Website</a>
+      </div>
+
+      <div id="inviteMismatch" class="is-hidden">
+        <h2 class="auth-title">Wrong account</h2>
+        <p class="auth-sub">You're signed in as <span id="mismatchCurrentEmail"></span>, but this invitation is for <span id="mismatchInviteEmail"></span>. Sign out first, then open this link again.</p>
+        <button type="button" class="auth-submit js-signout">Sign Out</button>
+      </div>
+
+      <div id="inviteAccepted" class="is-hidden">
+        <h2 class="auth-title">You're in!</h2>
+        <p class="auth-sub">Your account has been created as <strong id="acceptedRole"></strong>. An administrator still needs to activate it before you can sign in to the staff portal — they've been notified automatically once they check the Employees tab.</p>
+        <a href="index.html" class="btn-primary" style="width:100%; justify-content:center;">Back to Website</a>
+      </div>
+
+      <div id="inviteConfirmEmail" class="is-hidden">
+        <h2 class="auth-title">Check your email</h2>
+        <p class="auth-sub">We sent a confirmation link to <span id="confirmEmailAddress"></span>. Click it, and you'll be brought right back here to finish.</p>
+      </div>
+
+      <form id="inviteForm" class="is-hidden" novalidate>
+        <h2 class="auth-title">You're invited</h2>
+        <p class="auth-sub">Join Calestia Travel &amp; Tours as <strong id="inviteRoleLabel"></strong> — <span id="inviteEmailLabel"></span>. Create a password to accept.</p>
+
+        <div class="form-group">
+          <label for="invitePassword">Password</label>
+          <input type="password" id="invitePassword" placeholder="At least 8 characters" autocomplete="new-password" minlength="8" required />
+        </div>
+        <div class="form-group">
+          <label for="invitePasswordConfirm">Confirm Password</label>
+          <input type="password" id="invitePasswordConfirm" placeholder="Re-enter your password" autocomplete="new-password" minlength="8" required />
+        </div>
+        <button type="submit" class="auth-submit">Create Account &amp; Accept</button>
+        <p class="auth-switch">
+          Already have a Calestia account?
+          <a href="#" id="switchToSignIn">Sign in instead</a>
+        </p>
+      </form>
+
+      <form id="inviteSignInForm" class="is-hidden" novalidate>
+        <h2 class="auth-title">Sign in to accept</h2>
+        <p class="auth-sub">Sign in with your existing account for <span id="signinEmailLabel"></span> to accept this invitation.</p>
+
+        <div class="form-group">
+          <label for="inviteSigninPassword">Password</label>
+          <input type="password" id="inviteSigninPassword" placeholder="••••••••" autocomplete="current-password" required />
+        </div>
+        <button type="submit" class="auth-submit">Sign In &amp; Accept</button>
+        <p class="auth-switch">
+          Need to create a password instead?
+          <a href="#" id="switchToSignUp">Create account</a>
+        </p>
+      </form>
+    </div>
+  </main>
+
+  <footer>
+    <div class="footer-bottom">
+      <p>© 2026 Calestia Travel &amp; Tours. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="config.js"></script>
+  <script src="accept-invite.js"></script>
+</body>
+</html>

@@ -566,7 +566,112 @@
   }
 
   /* ------------------------------------------------------------------
-     Employees (admin only)
+     Employee invitations (admin only) — the only door into staff roles
+     ------------------------------------------------------------------ */
+  function wireInviteForm() {
+    var form = document.getElementById('inviteEmployeeForm');
+    if (!form || form.dataset.wired) return;
+    form.dataset.wired = '1';
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var email = document.getElementById('inviteEmail').value.trim();
+      var role = document.getElementById('inviteRole').value;
+      if (!email) { toast('Enter an email address.', true); return; }
+
+      var btn = form.querySelector('button[type="submit"]');
+      var originalText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Sending…';
+
+      supabaseClient.from('employee_invitations').insert({ email: email, role: role, invited_by: currentProfile.id }).select().then(function (result) {
+        btn.disabled = false;
+        btn.textContent = originalText;
+        if (result.error) { toast(result.error.message || 'Could not create invitation.', true); return; }
+        form.reset();
+        var link = buildInviteLink(result.data[0].token);
+        copyToClipboard(link);
+        toast('Invitation created — link copied to your clipboard.');
+        loadInvitations();
+        loadAuditLog();
+      }).catch(function () {
+        btn.disabled = false;
+        btn.textContent = originalText;
+        toast('Something went wrong. Please try again.', true);
+      });
+    });
+  }
+
+  function buildInviteLink(token) {
+    return window.location.origin + '/accept-invite.html?token=' + token;
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).catch(function () {});
+    }
+  }
+
+  var allInvitationsCache = [];
+
+  function loadInvitations() {
+    supabaseClient.from('employee_invitations').select('*').order('created_at', { ascending: false }).then(function (result) {
+      allInvitationsCache = result.data || [];
+      renderInvitationsTable();
+    }).catch(function () {
+      var tbody = document.getElementById('invitationsTableBody');
+      if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="portal-hint">Could not load invitations.</td></tr>';
+    });
+  }
+
+  function renderInvitationsTable() {
+    var tbody = document.getElementById('invitationsTableBody');
+    if (!tbody) return;
+    if (!allInvitationsCache.length) { tbody.innerHTML = '<tr><td colspan="5" class="portal-hint">No invitations sent yet.</td></tr>'; return; }
+
+    tbody.innerHTML = allInvitationsCache.map(function (inv) {
+      var roleLabel = inv.role.charAt(0).toUpperCase() + inv.role.slice(1);
+      var expired = new Date(inv.expires_at) < new Date();
+      var statusLabel = inv.status === 'pending' && expired ? 'Expired' : (inv.status.charAt(0).toUpperCase() + inv.status.slice(1));
+      var actions = '';
+      if (inv.status === 'pending' && !expired) {
+        actions = '<button type="button" class="btn-outline" style="padding:8px 12px;" data-inv-action="copy" data-id="' + inv.id + '">Copy Link</button>' +
+          '<button type="button" class="staff-doc-reject" data-inv-action="revoke" data-id="' + inv.id + '">Revoke</button>';
+      }
+      return '<tr>' +
+        '<td>' + escapeHTML(inv.email) + '</td>' +
+        '<td><span class="staff-pill">' + roleLabel + '</span></td>' +
+        '<td>' + formatDate(inv.created_at) + '</td>' +
+        '<td>' + (inv.status === 'pending' ? formatDate(inv.expires_at) : '—') + ' <span class="staff-pill' + (inv.status === 'accepted' ? '' : inv.status === 'revoked' || expired ? ' is-danger' : '') + '">' + statusLabel + '</span></td>' +
+        '<td class="staff-action-cell">' + actions + '</td>' +
+      '</tr>';
+    }).join('');
+
+    tbody.querySelectorAll('[data-inv-action]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = this.getAttribute('data-id');
+        var inv = allInvitationsCache.filter(function (i) { return i.id === id; })[0];
+        if (!inv) return;
+        if (this.getAttribute('data-inv-action') === 'copy') {
+          copyToClipboard(buildInviteLink(inv.token));
+          toast('Invite link copied.');
+        } else {
+          revokeInvitation(id);
+        }
+      });
+    });
+  }
+
+  function revokeInvitation(id) {
+    supabaseClient.from('employee_invitations').update({ status: 'revoked' }).eq('id', id).then(function (result) {
+      if (result.error) { toast(result.error.message || 'Could not revoke invitation.', true); return; }
+      toast('Invitation revoked.');
+      loadInvitations();
+    }).catch(function () { toast('Something went wrong.', true); });
+  }
+
+  /* ------------------------------------------------------------------
+     Employee accounts (admin only)
      ------------------------------------------------------------------ */
   var allProfilesCache = [];
 
@@ -575,6 +680,9 @@
       allProfilesCache = result.data || [];
       renderEmployeesTable();
     });
+
+    wireInviteForm();
+    loadInvitations();
 
     var search = document.getElementById('employeeSearch');
     if (search && !search.dataset.wired) {
@@ -598,7 +706,10 @@
       var roleLabel = p.role.charAt(0).toUpperCase() + p.role.slice(1);
       var statusLabel = p.status.charAt(0).toUpperCase() + p.status.slice(1);
       var actions = [];
-      if (p.role === 'client') actions.push('<button type="button" class="btn-outline" style="padding:8px 12px;" data-emp-action="make_employee" data-id="' + p.id + '">Make Employee</button>');
+
+      if (p.role === 'client') {
+        actions.push('<button type="button" class="btn-outline" style="padding:8px 12px;" data-emp-action="make_employee" data-id="' + p.id + '">Make Employee</button>');
+      }
       if (p.role === 'employee') {
         actions.push('<button type="button" class="btn-outline" style="padding:8px 12px;" data-emp-action="make_admin" data-id="' + p.id + '">Make Admin</button>');
         actions.push('<button type="button" class="btn-outline" style="padding:8px 12px;" data-emp-action="make_client" data-id="' + p.id + '">Demote to Client</button>');
@@ -606,16 +717,27 @@
       if (p.role === 'admin') {
         actions.push('<button type="button" class="btn-outline" style="padding:8px 12px;" data-emp-action="make_employee" data-id="' + p.id + '">Demote to Employee</button>');
       }
+
       if (p.role !== 'client') {
-        actions.push(p.status === 'active'
-          ? '<button type="button" class="staff-doc-reject" data-emp-action="disable" data-id="' + p.id + '">Disable</button>'
-          : '<button type="button" class="staff-doc-approve" data-emp-action="enable" data-id="' + p.id + '">Enable</button>');
+        if (p.status === 'pending') {
+          actions.push('<button type="button" class="staff-doc-approve" data-emp-action="activate" data-id="' + p.id + '">Activate</button>');
+        }
+        if (p.status === 'active') {
+          actions.push('<button type="button" class="staff-doc-reject" data-emp-action="suspend" data-id="' + p.id + '">Suspend</button>');
+          actions.push('<button type="button" class="staff-doc-reject" data-emp-action="disable" data-id="' + p.id + '">Disable</button>');
+        }
+        if (p.status === 'suspended' || p.status === 'disabled') {
+          actions.push('<button type="button" class="staff-doc-approve" data-emp-action="reactivate" data-id="' + p.id + '">Reactivate</button>');
+          if (p.status === 'suspended') actions.push('<button type="button" class="staff-doc-reject" data-emp-action="disable" data-id="' + p.id + '">Disable</button>');
+        }
+        actions.push('<button type="button" class="staff-doc-reject" data-emp-action="remove" data-id="' + p.id + '">Remove Access</button>');
       }
+
       return '<tr>' +
         '<td><strong>' + escapeHTML(p.full_name || 'Unnamed') + '</strong></td>' +
         '<td>' + escapeHTML(p.email) + '</td>' +
         '<td><span class="staff-pill">' + roleLabel + '</span></td>' +
-        '<td><span class="staff-pill ' + (p.status === 'disabled' ? 'is-danger' : '') + '">' + statusLabel + '</span></td>' +
+        '<td><span class="staff-pill ' + (p.status === 'active' ? '' : 'is-danger') + '">' + statusLabel + '</span></td>' +
         '<td class="staff-action-cell">' + actions.join('') + '</td>' +
       '</tr>';
     }).join('');
@@ -627,17 +749,22 @@
     });
   }
 
+  var SELF_RISK_ACTIONS = ['suspend', 'disable', 'make_client', 'remove'];
+
   function handleEmployeeAction(action, targetId) {
-    if (targetId === currentProfile.id && (action === 'disable' || action === 'make_employee' || action === 'make_client')) {
-      if (!window.confirm('This will change your own account. Continue?')) return;
+    if (targetId === currentProfile.id && SELF_RISK_ACTIONS.indexOf(action) !== -1) {
+      if (!window.confirm('This will reduce your own access. Continue?')) return;
     }
 
     var payload = {};
-    if (action === 'make_employee') payload.role = 'employee';
-    if (action === 'make_admin') payload.role = 'admin';
-    if (action === 'make_client') payload.role = 'client';
+    if (action === 'make_employee') { payload.role = 'employee'; payload.status = 'pending'; }
+    if (action === 'make_admin') { payload.role = 'admin'; payload.status = 'pending'; }
+    if (action === 'make_client') { payload.role = 'client'; payload.status = 'active'; }
+    if (action === 'activate') payload.status = 'active';
+    if (action === 'suspend') payload.status = 'suspended';
     if (action === 'disable') payload.status = 'disabled';
-    if (action === 'enable') payload.status = 'active';
+    if (action === 'reactivate') payload.status = 'active';
+    if (action === 'remove') { payload.role = 'client'; payload.status = 'active'; }
 
     supabaseClient.from('profiles').update(payload).eq('id', targetId)
       .then(function (result) {
@@ -689,6 +816,9 @@
       .on('postgres_changes', { event: '*', schema: 'public', table: 'remarks' }, handleRealtimeUpdate)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, function () {
         if (currentProfile.role === 'admin') loadEmployees();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'employee_invitations' }, function () {
+        if (currentProfile.role === 'admin') loadInvitations();
       })
       .subscribe();
   }
