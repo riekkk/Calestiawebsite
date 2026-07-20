@@ -528,6 +528,7 @@
   }
 
   var currentSession = null;
+  var clientPortalLoaded = false;
 
   function updateAuthUI(session) {
     currentSession = session || null;
@@ -555,6 +556,11 @@
 
     var reviewName = document.getElementById('reviewName');
     if (reviewName) reviewName.value = fullName;
+
+    if (!clientPortalLoaded && document.getElementById('documentsTableBody')) {
+      clientPortalLoaded = true;
+      loadClientPortalData();
+    }
   }
 
   function handleSignOut() {
@@ -865,6 +871,374 @@
 
     if (searchInput) searchInput.addEventListener('input', applyFilters);
     if (categorySelect) categorySelect.addEventListener('change', applyFilters);
+  }
+
+  /* ==================================================================
+     14. Client Portal — application status, documents, remarks, notifications
+     ================================================================== */
+  var ALLOWED_DOC_MIME = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+  var MAX_DOC_BYTES = 10 * 1024 * 1024; // 10 MB, mirrors the storage bucket limit
+  var DOCUMENTS_BUCKET = 'client-documents';
+
+  function statusLabel(list, key) {
+    var found = list.filter(function (s) { return s.key === key; })[0];
+    return found ? found.label : key;
+  }
+
+  function loadClientPortalData() {
+    var clientId = currentSession.user.id;
+
+    loadApplicationStatus(clientId);
+    loadDocuments(clientId);
+    loadRemarks(clientId);
+    loadNotifications(clientId);
+    subscribeClientPortalRealtime(clientId);
+    initNotifBell();
+  }
+
+  /* ---- Application status timeline ---- */
+  function loadApplicationStatus(clientId) {
+    supabaseClient.from('applications').select('*').eq('client_id', clientId).maybeSingle()
+      .then(function (result) {
+        if (result.error) {
+          renderStatusTrack(null);
+          return;
+        }
+        renderStatusTrack(result.data);
+      })
+      .catch(function () { renderStatusTrack(null); });
+  }
+
+  function renderStatusTrack(applicationRow) {
+    var track = document.getElementById('statusTrack');
+    if (!track) return;
+
+    if (!applicationRow) {
+      track.innerHTML = '<p class="portal-hint">Your application will appear here once Calestia sets it up — this happens automatically after you sign up.</p>';
+      return;
+    }
+
+    var statuses = window.CALESTIA_APPLICATION_STATUSES || [];
+    var isDenied = applicationRow.status === 'visa_denied';
+
+    // On the happy path, walk the list in order. If denied, stop the list
+    // at "visa_denied" and drop the two steps that only make sense after
+    // an approval (passport pickup, completed).
+    var visibleStatuses = isDenied
+      ? statuses.filter(function (s) { return s.key !== 'visa_approved' && s.key !== 'passport_ready_for_pickup' && s.key !== 'completed'; })
+      : statuses;
+
+    var currentIndex = visibleStatuses.map(function (s) { return s.key; }).indexOf(applicationRow.status);
+
+    var html = '';
+    visibleStatuses.forEach(function (s, i) {
+      var stepClass = 'status-step';
+      var isDone = i < currentIndex;
+      var isCurrent = i === currentIndex;
+      if (isCurrent && isDenied) stepClass += ' is-denied is-current';
+      else if (isDone) stepClass += ' is-done';
+      else if (isCurrent) stepClass += ' is-current';
+
+      html += '<div class="' + stepClass + '"><div class="status-step-dot">' + (isDone ? '✓' : (i + 1)) + '</div>' +
+        '<div><div class="status-step-label">' + s.label + '</div></div></div>';
+    });
+
+    track.innerHTML = html;
+  }
+
+  /* ---- Documents ---- */
+  function loadDocuments(clientId) {
+    supabaseClient.from('documents').select('*').eq('client_id', clientId)
+      .then(function (result) {
+        renderDocumentsTable(result.error ? [] : (result.data || []));
+      })
+      .catch(function () { renderDocumentsTable([]); });
+  }
+
+  function renderDocumentsTable(documentRows) {
+    var tbody = document.getElementById('documentsTableBody');
+    if (!tbody) return;
+
+    var byType = {};
+    documentRows.forEach(function (d) { byType[d.document_type] = d; });
+
+    var types = window.CALESTIA_DOCUMENT_TYPES || [];
+    var html = '';
+    types.forEach(function (t) {
+      var doc = byType[t.key];
+      html += buildDocumentRowHTML(t, doc);
+    });
+    tbody.innerHTML = html;
+
+    types.forEach(function (t) { wireDocumentRow(t.key); });
+  }
+
+  function documentStatusPillHTML(doc) {
+    if (!doc || !doc.file_path) {
+      return '<span class="portal-status-pill">Not Uploaded</span>';
+    }
+    var map = {
+      pending: ['Pending Review', ''],
+      under_review: ['Under Review', 'is-review'],
+      verified: ['Verified', 'is-verified'],
+      rejected: ['Rejected', 'is-rejected'],
+      reupload_requested: ['Re-upload Requested', 'is-rejected']
+    };
+    var entry = map[doc.status] || [doc.status, ''];
+    return '<span class="portal-status-pill ' + entry[1] + '">' + entry[0] + '</span>';
+  }
+
+  function buildDocumentRowHTML(type, doc) {
+    var hasFile = !!(doc && doc.file_path);
+    return (
+      '<tr data-doc-type="' + type.key + '">' +
+        '<td><strong>' + type.label + '</strong></td>' +
+        '<td>' + type.description + '</td>' +
+        '<td>' +
+          '<input type="file" class="portal-file-input" id="file-' + type.key + '" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" hidden />' +
+          '<div class="portal-file-actions" data-file-actions>' +
+            '<button type="button" class="portal-attach-btn" data-action="attach">📎 ' + (hasFile ? 'Replace' : 'Attach') + ' File</button>' +
+            (hasFile ? '<a class="portal-file-preview" data-action="preview" href="#">' + escapeHTML(doc.file_name || 'View file') + '</a>' : '') +
+            (hasFile ? '<button type="button" class="portal-file-remove" data-action="remove" aria-label="Remove file">✕</button>' : '') +
+          '</div>' +
+        '</td>' +
+        '<td data-status-cell>' + documentStatusPillHTML(doc) + '</td>' +
+        '<td class="portal-remarks-cell">' + (doc && doc.remarks ? escapeHTML(doc.remarks) : '—') + '</td>' +
+      '</tr>'
+    );
+  }
+
+  function wireDocumentRow(docType) {
+    var row = document.querySelector('tr[data-doc-type="' + docType + '"]');
+    if (!row) return;
+    var fileInput = row.querySelector('.portal-file-input');
+    var attachBtn = row.querySelector('[data-action="attach"]');
+    var removeBtn = row.querySelector('[data-action="remove"]');
+    var previewLink = row.querySelector('[data-action="preview"]');
+
+    if (attachBtn) {
+      attachBtn.addEventListener('click', function () { fileInput.click(); });
+    }
+    if (fileInput) {
+      fileInput.addEventListener('change', function () {
+        var file = fileInput.files && fileInput.files[0];
+        if (file) handleDocumentUpload(docType, file, row);
+        fileInput.value = '';
+      });
+    }
+    if (removeBtn) {
+      removeBtn.addEventListener('click', function () { handleDocumentRemove(docType, row); });
+    }
+    if (previewLink) {
+      previewLink.addEventListener('click', function (e) {
+        e.preventDefault();
+        openDocumentPreview(docType);
+      });
+    }
+  }
+
+  function handleDocumentUpload(docType, file, row) {
+    if (ALLOWED_DOC_MIME.indexOf(file.type) === -1) {
+      showToast('Only PDF, JPG, JPEG, or PNG files are allowed.', true);
+      return;
+    }
+    if (file.size > MAX_DOC_BYTES) {
+      showToast('File is too large. Maximum size is 10 MB.', true);
+      return;
+    }
+
+    var actions = row.querySelector('[data-file-actions]');
+    var originalHTML = actions.innerHTML;
+    actions.innerHTML = '<span class="portal-file-name">Uploading…</span>';
+
+    var clientId = currentSession.user.id;
+    var path = clientId + '/' + docType + '/' + Date.now() + '-' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+
+    // Clean up the previous file for this document type, if any, before uploading the new one.
+    supabaseClient.from('documents').select('file_path').eq('client_id', clientId).eq('document_type', docType).maybeSingle()
+      .then(function (existing) {
+        var oldPath = existing.data && existing.data.file_path;
+        return supabaseClient.storage.from(DOCUMENTS_BUCKET).upload(path, file, { upsert: false })
+          .then(function (uploadResult) {
+            if (uploadResult.error) throw uploadResult.error;
+            if (oldPath) {
+              supabaseClient.storage.from(DOCUMENTS_BUCKET).remove([oldPath]).catch(function () {});
+            }
+            return supabaseClient.from('documents').upsert({
+              client_id: clientId,
+              document_type: docType,
+              file_path: path,
+              file_name: file.name,
+              file_size: file.size,
+              mime_type: file.type,
+              uploaded_at: new Date().toISOString(),
+              status: 'pending'
+            }, { onConflict: 'client_id,document_type' });
+          });
+      })
+      .then(function (upsertResult) {
+        if (upsertResult && upsertResult.error) throw upsertResult.error;
+        showToast(file.name + ' uploaded successfully.');
+        loadDocuments(clientId);
+      })
+      .catch(function (err) {
+        actions.innerHTML = originalHTML;
+        showToast((err && err.message) || 'Upload failed. Please try again.', true);
+      });
+  }
+
+  function handleDocumentRemove(docType, row) {
+    var clientId = currentSession.user.id;
+    supabaseClient.from('documents').select('file_path').eq('client_id', clientId).eq('document_type', docType).maybeSingle()
+      .then(function (existing) {
+        var oldPath = existing.data && existing.data.file_path;
+        var removeStorage = oldPath
+          ? supabaseClient.storage.from(DOCUMENTS_BUCKET).remove([oldPath])
+          : Promise.resolve();
+        return removeStorage.then(function () {
+          return supabaseClient.from('documents').update({
+            file_path: null, file_name: null, file_size: null, mime_type: null,
+            uploaded_at: null, status: 'pending'
+          }).eq('client_id', clientId).eq('document_type', docType);
+        });
+      })
+      .then(function (result) {
+        if (result && result.error) throw result.error;
+        showToast('File removed.');
+        loadDocuments(clientId);
+      })
+      .catch(function (err) {
+        showToast((err && err.message) || 'Could not remove file.', true);
+      });
+  }
+
+  function openDocumentPreview(docType) {
+    var clientId = currentSession.user.id;
+    supabaseClient.from('documents').select('file_path').eq('client_id', clientId).eq('document_type', docType).maybeSingle()
+      .then(function (result) {
+        var path = result.data && result.data.file_path;
+        if (!path) return;
+        return supabaseClient.storage.from(DOCUMENTS_BUCKET).createSignedUrl(path, 300);
+      })
+      .then(function (signed) {
+        if (signed && signed.data && signed.data.signedUrl) {
+          window.open(signed.data.signedUrl, '_blank', 'noopener');
+        }
+      })
+      .catch(function () { showToast('Could not open file.', true); });
+  }
+
+  /* ---- Remarks ---- */
+  function loadRemarks(clientId) {
+    supabaseClient.from('remarks').select('*').eq('client_id', clientId).order('created_at', { ascending: false })
+      .then(function (result) { renderRemarks(result.error ? [] : (result.data || [])); })
+      .catch(function () { renderRemarks([]); });
+  }
+
+  function renderRemarks(remarkRows) {
+    var list = document.getElementById('remarksList');
+    if (!list) return;
+    if (!remarkRows.length) {
+      list.innerHTML = '<p class="portal-hint">No remarks yet.</p>';
+      return;
+    }
+    list.innerHTML = remarkRows.map(function (r) {
+      var when = r.created_at ? new Date(r.created_at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : '';
+      return '<div class="portal-remark-item"><div>' + escapeHTML(r.message) + '</div>' +
+        '<span class="portal-remark-time">' + when + '</span></div>';
+    }).join('');
+  }
+
+  function escapeHTML(str) {
+    var div = document.createElement('div');
+    div.textContent = str == null ? '' : String(str);
+    return div.innerHTML;
+  }
+
+  /* ---- Notifications ---- */
+  function loadNotifications(clientId) {
+    supabaseClient.from('notifications').select('*').eq('client_id', clientId).order('created_at', { ascending: false }).limit(30)
+      .then(function (result) { renderNotifications(result.error ? [] : (result.data || [])); })
+      .catch(function () { renderNotifications([]); });
+  }
+
+  function renderNotifications(notifRows) {
+    var list = document.getElementById('notifList');
+    var badge = document.getElementById('notifBadge');
+    if (!list) return;
+
+    var unread = notifRows.filter(function (n) { return !n.is_read; });
+    if (badge) {
+      if (unread.length) {
+        badge.textContent = unread.length > 9 ? '9+' : String(unread.length);
+        badge.classList.remove('is-hidden');
+      } else {
+        badge.classList.add('is-hidden');
+      }
+    }
+
+    if (!notifRows.length) {
+      list.innerHTML = '<p class="portal-hint">No notifications yet.</p>';
+      return;
+    }
+
+    list.innerHTML = notifRows.map(function (n) {
+      var when = n.created_at ? new Date(n.created_at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : '';
+      return '<div class="portal-notif-item' + (n.is_read ? '' : ' is-unread') + '">' +
+        escapeHTML(n.message) + '<span class="portal-notif-time">' + when + '</span></div>';
+    }).join('');
+  }
+
+  function initNotifBell() {
+    var btn = document.getElementById('notifBellBtn');
+    var panel = document.getElementById('notifPanel');
+    if (!btn || !panel) return;
+
+    btn.addEventListener('click', function () {
+      var opening = panel.classList.contains('is-hidden');
+      panel.classList.toggle('is-hidden');
+      btn.setAttribute('aria-expanded', opening ? 'true' : 'false');
+      if (opening) markNotificationsRead();
+    });
+
+    document.addEventListener('click', function (e) {
+      if (!panel.classList.contains('is-hidden') && !panel.contains(e.target) && e.target !== btn) {
+        panel.classList.add('is-hidden');
+        btn.setAttribute('aria-expanded', 'false');
+      }
+    });
+  }
+
+  function markNotificationsRead() {
+    if (!currentSession) return;
+    supabaseClient.from('notifications')
+      .update({ is_read: true })
+      .eq('client_id', currentSession.user.id)
+      .eq('is_read', false)
+      .then(function () {
+        var badge = document.getElementById('notifBadge');
+        if (badge) badge.classList.add('is-hidden');
+      })
+      .catch(function () {});
+  }
+
+  /* ---- Realtime: keep this client's portal in sync with staff actions ---- */
+  function subscribeClientPortalRealtime(clientId) {
+    supabaseClient
+      .channel('client-portal-' + clientId)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'documents', filter: 'client_id=eq.' + clientId }, function () {
+        loadDocuments(clientId);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'applications', filter: 'client_id=eq.' + clientId }, function () {
+        loadApplicationStatus(clientId);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'remarks', filter: 'client_id=eq.' + clientId }, function () {
+        loadRemarks(clientId);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: 'client_id=eq.' + clientId }, function () {
+        loadNotifications(clientId);
+      })
+      .subscribe();
   }
 
 })();

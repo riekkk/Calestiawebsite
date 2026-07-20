@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Calestia Travel &amp; Tours</title>
+  <meta name="description" content="Staff portal for Calestia Travel & Tours employees and administrators." />
+  <meta name="robots" content="noindex" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" type="image/png" href="assets/images/calestia-logo.png" />
+</head>
+<body data-protected="true" data-staff-only="true">
+
+  <!-- Shown while we're confirming this account is staff; hidden once confirmed -->
+  <div class="staff-gate" id="staffGate">
+    <p>Checking your access…</p>
+  </div>
+
+  <div id="staffApp" class="is-hidden">
+
+    <nav class="portal-nav">
+      <a href="index.html" class="portal-nav-logo">
+        <img src="assets/images/calestia-logo.png" alt="Calestia logo" />
+        <span>Calestia Staff Portal</span>
+      </a>
+      <div class="portal-nav-actions">
+        <span class="staff-role-badge" id="staffRoleBadge"></span>
+        <a href="index.html" class="portal-nav-link">&larr; Back to Website</a>
+        <button type="button" class="portal-signout-btn js-signout">Sign Out</button>
+      </div>
+    </nav>
+
+    <main class="staff-main">
+      <div class="staff-container">
+
+        <div class="staff-tabs" role="tablist">
+          <button type="button" class="staff-tab is-active" data-tab="dashboard">Dashboard</button>
+          <button type="button" class="staff-tab" data-tab="clients">Clients</button>
+          <button type="button" class="staff-tab is-hidden" data-tab="employees" id="employeesTabBtn">Employees</button>
+          <button type="button" class="staff-tab is-hidden" data-tab="audit" id="auditTabBtn">Audit Log</button>
+        </div>
+
+        <!-- ==================== DASHBOARD ==================== -->
+        <section class="staff-panel is-active" data-panel="dashboard">
+          <div class="staff-stat-grid" id="staffStatGrid">
+            <div class="staff-stat"><div class="staff-stat-num" id="statTotalClients">—</div><div class="staff-stat-label">Total Clients</div></div>
+            <div class="staff-stat"><div class="staff-stat-num" id="statActive">—</div><div class="staff-stat-label">Active Applications</div></div>
+            <div class="staff-stat"><div class="staff-stat-num" id="statPendingDocs">—</div><div class="staff-stat-label">Pending Documents</div></div>
+            <div class="staff-stat"><div class="staff-stat-num" id="statUnderReview">—</div><div class="staff-stat-label">Under Review</div></div>
+            <div class="staff-stat"><div class="staff-stat-num" id="statApproved">—</div><div class="staff-stat-label">Approved Visas</div></div>
+            <div class="staff-stat"><div class="staff-stat-num" id="statDenied">—</div><div class="staff-stat-label">Denied Visas</div></div>
+          </div>
+
+          <div class="staff-dash-cols">
+            <div class="staff-card">
+              <h2>Recently Updated Applications</h2>
+              <div id="recentApplications"><p class="portal-hint">Loading…</p></div>
+            </div>
+            <div class="staff-card">
+              <h2>Recent Activity</h2>
+              <div id="recentActivity"><p class="portal-hint">Loading…</p></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== CLIENTS ==================== -->
+        <section class="staff-panel" data-panel="clients">
+          <div class="staff-toolbar">
+            <input type="text" id="clientSearch" placeholder="Search clients by name or email…" aria-label="Search clients" />
+            <select id="clientStatusFilter" aria-label="Filter by application status">
+              <option value="">All Statuses</option>
+            </select>
+          </div>
+          <div class="staff-table-wrap">
+            <table class="staff-table">
+              <thead>
+                <tr>
+                  <th>Client</th>
+                  <th>Email</th>
+                  <th>Application Status</th>
+                  <th>Documents</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="clientsTableBody">
+                <tr><td colspan="5" class="portal-hint">Loading clients…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ==================== EMPLOYEES (admin only) ==================== -->
+        <section class="staff-panel" data-panel="employees">
+          <div class="staff-card">
+            <h2>Promote a Client to Staff</h2>
+            <p class="portal-hint">The person must already have a Calestia account (they sign up like any client). Search for them below, then assign a role.</p>
+            <div class="staff-toolbar">
+              <input type="text" id="employeeSearch" placeholder="Search all accounts by name or email…" aria-label="Search accounts" />
+            </div>
+          </div>
+          <div class="staff-table-wrap">
+            <table class="staff-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="employeesTableBody">
+                <tr><td colspan="5" class="portal-hint">Loading accounts…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ==================== AUDIT LOG (admin only) ==================== -->
+        <section class="staff-panel" data-panel="audit">
+          <div class="staff-card">
+            <h2>Audit Log</h2>
+            <p class="portal-hint">Every status change, document verification, and account role change is recorded automatically.</p>
+          </div>
+          <div class="staff-table-wrap">
+            <table class="staff-table">
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>Staff Member</th>
+                  <th>Action</th>
+                  <th>Client</th>
+                  <th>Change</th>
+                </tr>
+              </thead>
+              <tbody id="auditTableBody">
+                <tr><td colspan="5" class="portal-hint">Loading audit log…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+      </div>
+    </main>
+
+    <footer>
+      <div class="footer-bottom">
+        <p>© 2026 Calestia Travel &amp; Tours. All rights reserved.</p>
+      </div>
+    </footer>
+  </div>
+
+  <!-- ==================== CLIENT DETAIL MODAL ==================== -->
+  <div class="staff-modal" id="clientDetailModal" aria-hidden="true">
+    <div class="staff-modal-backdrop" data-close-client-modal></div>
+    <div class="staff-modal-card" role="dialog" aria-labelledby="clientDetailName" aria-modal="true">
+      <button type="button" class="auth-close" data-close-client-modal aria-label="Close">✕</button>
+
+      <h2 id="clientDetailName" class="staff-modal-title">Client name</h2>
+      <p class="staff-modal-sub" id="clientDetailEmail"></p>
+
+      <div class="staff-detail-section">
+        <label for="applicationStatusSelect">Application Status</label>
+        <div class="staff-status-row">
+          <select id="applicationStatusSelect"></select>
+          <button type="button" class="btn-primary" id="saveStatusBtn" style="padding:12px 22px;">Save</button>
+        </div>
+        <p class="staff-conflict-warning is-hidden" id="statusConflictWarning">⚠ This application was updated by someone else since you opened it. Refresh before saving.</p>
+      </div>
+
+      <div class="staff-detail-section">
+        <h3>Documents</h3>
+        <div id="clientDetailDocuments" class="staff-doc-review-list"></div>
+      </div>
+
+      <div class="staff-detail-section">
+        <h3>Remarks <span class="optional-tag">(visible to the client)</span></h3>
+        <div id="clientRemarksList" class="portal-remarks-list"></div>
+        <div class="staff-add-note-row">
+          <textarea id="newRemarkText" placeholder="e.g. Please upload a clearer copy of your passport bio page."></textarea>
+          <button type="button" class="btn-primary" id="addRemarkBtn" style="padding:12px 22px;">Send</button>
+        </div>
+      </div>
+
+      <div class="staff-detail-section">
+        <h3>Internal Notes <span class="optional-tag">(staff only — never shown to the client)</span></h3>
+        <div id="internalNotesList" class="portal-remarks-list"></div>
+        <div class="staff-add-note-row">
+          <textarea id="newInternalNoteText" placeholder="Notes visible only to Calestia staff…"></textarea>
+          <button type="button" class="btn-outline" id="addInternalNoteBtn" style="padding:12px 22px;">Add Note</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== DOCUMENT REJECT / REUPLOAD MODAL ==================== -->
+  <div class="staff-modal" id="docActionModal" aria-hidden="true">
+    <div class="staff-modal-backdrop" data-close-doc-modal></div>
+    <div class="staff-modal-card staff-modal-card-sm" role="dialog" aria-modal="true">
+      <button type="button" class="auth-close" data-close-doc-modal aria-label="Close">✕</button>
+      <h2 class="staff-modal-title" id="docActionTitle">Reject document</h2>
+      <div class="form-group">
+        <label for="docActionRemark">Remark for the client</label>
+        <textarea id="docActionRemark" placeholder="Explain what needs to be fixed…"></textarea>
+      </div>
+      <button type="button" class="btn-primary" id="docActionConfirmBtn" style="width:100%;">Confirm</button>
+    </div>
+  </div>
+
+  <!-- ==================== TOAST ==================== -->
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <!-- Supabase SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
+  <!-- Supabase project config + shared portal constants -->
+  <script src="config.js"></script>
+
+  <!-- Shared site logic (auth, nav) -->
+  <script src="script.js"></script>
+
+  <!-- Staff-portal-only logic -->
+  <script src="staff-portal.js"></script>
+</body>
+</html>

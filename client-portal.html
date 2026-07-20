@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Client Portal — Calestia Travel &amp; Tours</title>
+  <title>Calestia Travel &amp; Tours</title>
   <meta name="description" content="Manage your Japan visa applications, bookings, and travel documents with Calestia Travel & Tours." />
   <meta name="robots" content="noindex" />
 
@@ -21,6 +21,17 @@
       <span>Calestia Client Portal</span>
     </a>
     <div class="portal-nav-actions">
+      <div class="portal-bell-wrap">
+        <button type="button" class="portal-bell-btn" id="notifBellBtn" aria-label="Notifications" aria-expanded="false">
+          🔔<span class="portal-bell-badge is-hidden" id="notifBadge">0</span>
+        </button>
+        <div class="portal-bell-panel is-hidden" id="notifPanel">
+          <div class="portal-bell-panel-head">Notifications</div>
+          <div class="portal-bell-panel-list" id="notifList">
+            <p class="portal-hint">No notifications yet.</p>
+          </div>
+        </div>
+      </div>
       <a href="index.html" class="portal-nav-link">&larr; Back to Website</a>
       <button type="button" class="portal-signout-btn js-signout">Sign Out</button>
     </div>
@@ -29,19 +40,15 @@
   <main class="portal-main">
     <div class="portal-hero">
       <h1>Welcome back, <span class="js-portal-username">traveler</span></h1>
-      <p>Manage your visa applications, bookings, travel documents, and payments in one secure place. Signed in as <span class="js-portal-email"></span>.</p>
+      <p>Manage your visa application, documents, and remarks in one secure place. Signed in as <span class="js-portal-email"></span>.</p>
     </div>
 
     <div class="portal-container">
       <div class="portal-card">
-        <h2>My Visa Applications</h2>
-        <div class="portal-status-grid">
-          <div class="portal-status"><div class="portal-status-count" style="color:#3B5583;">0</div><div class="portal-status-label">Application</div></div>
-          <div class="portal-status"><div class="portal-status-count" style="color:#E69A00;">0</div><div class="portal-status-label">Processing</div></div>
-          <div class="portal-status"><div class="portal-status-count" style="color:#2E9E5B;">0</div><div class="portal-status-label">Approved</div></div>
-          <div class="portal-status"><div class="portal-status-count" style="color:#5C7A9C;">0</div><div class="portal-status-label">Released</div></div>
+        <h2>My Visa Application</h2>
+        <div class="status-track" id="statusTrack" aria-label="Application status">
+          <p class="portal-hint">Loading your application status...</p>
         </div>
-        <p class="portal-hint">You have no active applications yet. <a href="index.html#services">Apply for a Japan visa</a> to get started.</p>
       </div>
 
       <div class="portal-card">
@@ -49,97 +56,29 @@
           <h2>My Documents</h2>
           <a href="forms-checklist.html" class="portal-action" style="padding:10px 18px;">📄 Forms &amp; Checklist</a>
         </div>
-        <div class="portal-table-wrap" id="documents">
+        <p class="portal-hint" style="margin-top:-8px; margin-bottom:16px;">Accepted formats: PDF, JPG, JPEG, PNG. Max file size 10&nbsp;MB. You can replace a file any time before it's verified.</p>
+        <div class="portal-table-wrap">
           <table class="portal-table">
             <thead>
               <tr>
                 <th>Requirement</th>
                 <th>Details</th>
-                <th>Upload</th>
+                <th>File</th>
                 <th>Status</th>
                 <th>Remarks</th>
               </tr>
             </thead>
-            <tbody>
-              <tr>
-                <td><strong>Passport</strong></td>
-                <td>Ensure your passport is self-signed. Include copies of your old and new passport. If your Japan visa is in your previous passport, include that passport as well.</td>
-                <td><button type="button" class="portal-attach-btn">📎 Attach File</button></td>
-                <td><span class="portal-status-pill">Pending</span></td>
-                <td>—</td>
-              </tr>
-              <tr>
-                <td><strong>Visa Application</strong></td>
-                <td>Must be typed and signed. If not applicable, write N/A. If your passport is damaged, attach an explanation letter.</td>
-                <td><button type="button" class="portal-attach-btn">📎 Attach File</button></td>
-                <td><span class="portal-status-pill">Pending</span></td>
-                <td>—</td>
-              </tr>
-              <tr>
-                <td><strong>1&times; Photograph</strong></td>
-                <td>Color photo taken within the last 6 months (4.5 &times; 3.5 cm). Do not wear white. Teeth should not be visible.</td>
-                <td><button type="button" class="portal-attach-btn">📎 Attach File</button></td>
-                <td><span class="portal-status-pill">Pending</span></td>
-                <td>—</td>
-              </tr>
-              <tr>
-                <td><strong>Passport Bio Page</strong></td>
-                <td>One A4-size color photocopy.</td>
-                <td><button type="button" class="portal-attach-btn">📎 Attach File</button></td>
-                <td><span class="portal-status-pill">Pending</span></td>
-                <td>—</td>
-              </tr>
-              <tr>
-                <td><strong>Used Japan Visa</strong></td>
-                <td>Provide color copies of all previous Japan visas. If unused, include an explanation letter.</td>
-                <td><button type="button" class="portal-attach-btn">📎 Attach File</button></td>
-                <td><span class="portal-status-pill">Pending</span></td>
-                <td>—</td>
-              </tr>
-              <tr>
-                <td><strong>Itinerary in Japan</strong></td>
-                <td>Include entry date, departure date and accommodation details.</td>
-                <td><button type="button" class="portal-attach-btn">📎 Attach File</button></td>
-                <td><span class="portal-status-pill">Pending</span></td>
-                <td>—</td>
-              </tr>
-              <tr>
-                <td><strong>Bank Certificate</strong></td>
-                <td>Must include Average Daily Balance (ADB).</td>
-                <td><button type="button" class="portal-attach-btn">📎 Attach File</button></td>
-                <td><span class="portal-status-pill">Pending</span></td>
-                <td>—</td>
-              </tr>
-              <tr>
-                <td><strong>Employment Certificate</strong></td>
-                <td>Must indicate employment period, salary and position.</td>
-                <td><button type="button" class="portal-attach-btn">📎 Attach File</button></td>
-                <td><span class="portal-status-pill">Pending</span></td>
-                <td>—</td>
-              </tr>
-              <tr>
-                <td><strong>Guarantee Letter</strong></td>
-                <td>Complete all fields. Write N/A if not applicable.</td>
-                <td><button type="button" class="portal-attach-btn">📎 Attach File</button></td>
-                <td><span class="portal-status-pill">Pending</span></td>
-                <td>—</td>
-              </tr>
-              <tr>
-                <td><strong>Authorization Letter</strong></td>
-                <td>Must contain all passenger names.</td>
-                <td><button type="button" class="portal-attach-btn">📎 Attach File</button></td>
-                <td><span class="portal-status-pill">Pending</span></td>
-                <td>—</td>
-              </tr>
-              <tr>
-                <td><strong>Others</strong></td>
-                <td>Additional documents requested by Calestia or the Embassy.</td>
-                <td><button type="button" class="portal-attach-btn">📎 Attach File</button></td>
-                <td><span class="portal-status-pill">Pending</span></td>
-                <td>—</td>
-              </tr>
+            <tbody id="documentsTableBody">
+              <tr><td colspan="5" class="portal-hint">Loading your documents...</td></tr>
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <div class="portal-card">
+        <h2>Remarks from Calestia</h2>
+        <div class="portal-remarks-list" id="remarksList">
+          <p class="portal-hint">No remarks yet.</p>
         </div>
       </div>
 
@@ -164,10 +103,10 @@
   <!-- ==================== TOAST ==================== -->
   <div id="toast" role="status" aria-live="polite"></div>
 
-  <!-- Supabase SDK (auth) -->
+  <!-- Supabase SDK (auth + data) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
-  <!-- Supabase project config (URL + public anon key) -->
+  <!-- Supabase project config (URL + public anon key) + shared portal constants -->
   <script src="config.js"></script>
 
   <!-- App logic -->
