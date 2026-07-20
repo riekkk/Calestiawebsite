@@ -1,0 +1,484 @@
+/* ==========================================================================
+   Calestia Travel & Tours — script.js
+   Handles: sakura petals, nav toggle, contact form (EmailJS), toast,
+   fade-in observer, auth modal (Supabase-ready).
+   ========================================================================== */
+
+(function () {
+  'use strict';
+
+  /* ------------------------------------------------------------------
+     CONFIG
+     ------------------------------------------------------------------ */
+  var EMAILJS_PUBLIC_KEY = 'Bp_1nflmnjqr7recy';
+  var EMAILJS_SERVICE_ID = 'service_y33oto9';
+  var EMAILJS_TEMPLATE_ID = 'template_svk1i9k';
+
+  // Supabase config — fill these in to enable auth
+  var SUPABASE_URL = 'YOUR_SUPABASE_URL_HERE';
+  var SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY_HERE';
+
+  /* ------------------------------------------------------------------
+     Initialize when DOM is ready
+     ------------------------------------------------------------------ */
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+
+  function init() {
+    initEmailJS();
+    initPetals();
+    initNav();
+    initContactForm();
+    initFadeInObserver();
+    initAuthModal();
+  }
+
+  /* ==================================================================
+     1. EmailJS init
+     ================================================================== */
+  function initEmailJS() {
+    if (typeof window.emailjs !== 'undefined' && typeof window.emailjs.init === 'function') {
+      try {
+        window.emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
+      } catch (e) {
+        // Older SDK versions accept a string
+        window.emailjs.init(EMAILJS_PUBLIC_KEY);
+      }
+    }
+  }
+
+  /* ==================================================================
+     2. Falling sakura petals (hero only)
+     ================================================================== */
+  function initPetals() {
+    var petalContainer = document.getElementById('petals');
+    if (!petalContainer) return;
+
+    // Respect reduced-motion preference
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return;
+    }
+
+    function createPetal() {
+      var p = document.createElement('div');
+      p.className = 'petal';
+      p.textContent = '🌸';
+      var size = 12 + Math.random() * 14;
+      var left = Math.random() * 100;
+      var duration = 5 + Math.random() * 4;
+      var drift = (Math.random() * 80 - 40).toFixed(0) + 'px';
+      p.style.left = left + '%';
+      p.style.fontSize = size + 'px';
+      p.style.setProperty('--drift', drift);
+      p.style.animation = 'petal-fall ' + duration + 's linear forwards';
+      petalContainer.appendChild(p);
+      setTimeout(function () { p.remove(); }, duration * 1000 + 200);
+    }
+
+    setInterval(createPetal, 450);
+    for (var i = 0; i < 6; i++) {
+      setTimeout(createPetal, i * 250);
+    }
+  }
+
+  /* ==================================================================
+     3. Nav toggle (mobile menu + auth button clone)
+     ================================================================== */
+  function initNav() {
+    var hamburger  = document.getElementById('hamburger');
+    var mobileMenu = document.getElementById('mobileMenu');
+    var mmPanel    = document.getElementById('mmPanel');
+    var closeMenu  = document.getElementById('closeMenu');
+    var authTrigger = document.getElementById('authTriggerBtn');
+
+    // Desktop auth button opens the modal
+    if (authTrigger) {
+      authTrigger.addEventListener('click', openAuthModal);
+    }
+
+    // Backdrop click closes menu
+    if (mobileMenu) {
+      mobileMenu.addEventListener('click', function (e) {
+        if (e.target === mobileMenu) mobileMenu.classList.remove('open');
+      });
+    }
+
+    // Inject a matching auth button into the mobile menu
+    if (mmPanel && authTrigger && !document.getElementById('mmAuthBtn')) {
+      var mmAuthBtn = document.createElement('button');
+      mmAuthBtn.type = 'button';
+      mmAuthBtn.id = 'mmAuthBtn';
+      mmAuthBtn.className = 'mm-auth-btn';
+      mmAuthBtn.textContent = authTrigger.textContent;
+      mmAuthBtn.addEventListener('click', function () {
+        if (mobileMenu) mobileMenu.classList.remove('open');
+        openAuthModal();
+      });
+      mmPanel.appendChild(mmAuthBtn);
+    }
+
+    // Hamburger open
+    if (hamburger && mobileMenu) {
+      hamburger.addEventListener('click', function () { mobileMenu.classList.add('open'); });
+      hamburger.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); mobileMenu.classList.add('open'); }
+      });
+    }
+
+    // Close button
+    if (closeMenu && mobileMenu) {
+      closeMenu.addEventListener('click', function () { mobileMenu.classList.remove('open'); });
+      closeMenu.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); mobileMenu.classList.remove('open'); }
+      });
+    }
+
+    // Close menu when a link is tapped
+    var mmLinks = document.querySelectorAll('.mm-link');
+    for (var i = 0; i < mmLinks.length; i++) {
+      mmLinks[i].addEventListener('click', function () {
+        var mm = document.getElementById('mobileMenu');
+        if (mm) mm.classList.remove('open');
+      });
+    }
+  }
+
+  /* ==================================================================
+     4. Contact form submit (EmailJS)
+     ================================================================== */
+  function initContactForm() {
+    var submitBtn = document.getElementById('submitBtn');
+    if (!submitBtn) return;
+
+    var originalHTML = submitBtn.innerHTML;
+
+    submitBtn.addEventListener('click', function () {
+      var fname       = getValue('fname');
+      var lname       = getValue('lname');
+      var email       = getValue('email');
+      var phone       = getValue('phone');
+      var visa        = getValue('visatype');
+      var travelDate  = getValue('traveldate');
+      var message     = getValue('message');
+
+      if (!fname || !lname || !email || !phone || !visa) {
+        showToast('Please fill in all required fields.', true);
+        return;
+      }
+
+      submitBtn.innerHTML = '<span>Sending...</span> <span>⏳</span>';
+      submitBtn.disabled = true;
+
+      if (typeof window.emailjs === 'undefined') {
+        submitBtn.innerHTML = originalHTML;
+        submitBtn.disabled = false;
+        showToast('Email service not available. Please contact us directly.', true);
+        return;
+      }
+
+      window.emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+        fname: fname,
+        lname: lname,
+        email: email,
+        phone: phone,
+        visa: visa,
+        travelDate: travelDate,
+        message: message
+      }, EMAILJS_PUBLIC_KEY).then(function () {
+        submitBtn.innerHTML = originalHTML;
+        submitBtn.disabled = false;
+        ['fname', 'lname', 'email', 'phone', 'message', 'traveldate'].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (el) el.value = '';
+        });
+        var vt = document.getElementById('visatype');
+        if (vt) vt.value = '';
+        showToast("Inquiry sent! We'll get back to you within 24 hours.");
+      }).catch(function () {
+        submitBtn.innerHTML = originalHTML;
+        submitBtn.disabled = false;
+        showToast('Something went wrong. Please try again or contact us directly.', true);
+      });
+    });
+  }
+
+  function getValue(id) {
+    var el = document.getElementById(id);
+    return el ? String(el.value || '').trim() : '';
+  }
+
+  /* ==================================================================
+     5. Toast
+     ================================================================== */
+  function showToast(msg, warn) {
+    var t = document.getElementById('toast');
+    if (!t) return;
+    t.textContent = msg;
+    t.style.background = warn ? '#c0392b' : '#335686';
+    t.classList.add('show');
+    setTimeout(function () { t.classList.remove('show'); }, 3200);
+  }
+  // Expose for other pages
+  window.calestiaToast = showToast;
+
+  /* ==================================================================
+     6. Fade-in on scroll
+     ================================================================== */
+  function initFadeInObserver() {
+    if (!('IntersectionObserver' in window)) return;
+
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          entry.target.style.opacity = '1';
+        }
+      });
+    }, { threshold: 0.1 });
+
+    var targets = document.querySelectorAll('.timeline-step, .why-row, .service-mini, .req-item');
+    for (var i = 0; i < targets.length; i++) {
+      targets[i].style.opacity = '0';
+      targets[i].style.transition = 'opacity 0.6s ease';
+      observer.observe(targets[i]);
+    }
+  }
+
+  /* ==================================================================
+     7. Auth Modal (Supabase-ready)
+     ==================================================================
+     UI is fully wired. To enable real auth:
+       1. Uncomment the Supabase <script> in index.html <head>.
+       2. Fill in SUPABASE_URL and SUPABASE_ANON_KEY above.
+       3. The functions below will pick it up automatically.
+     ================================================================== */
+  var supabaseClient = null;
+
+  function initAuthModal() {
+    var modal = document.getElementById('authModal');
+    if (!modal) return;
+
+    // Init Supabase if available and configured
+    if (typeof window.supabase !== 'undefined' &&
+        SUPABASE_URL && SUPABASE_URL.indexOf('YOUR_') !== 0 &&
+        SUPABASE_ANON_KEY && SUPABASE_ANON_KEY.indexOf('YOUR_') !== 0) {
+      supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    }
+
+    // Listen for the custom "open auth" event (kept for backward compat with old TSX)
+    window.addEventListener('calestia:auth-open', openAuthModal);
+
+    // Close handlers (backdrop + close button + [data-close-auth])
+    var closers = modal.querySelectorAll('[data-close-auth]');
+    for (var i = 0; i < closers.length; i++) {
+      closers[i].addEventListener('click', closeAuthModal);
+    }
+
+    // Escape key closes the modal
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && modal.classList.contains('open')) {
+        closeAuthModal();
+      }
+    });
+
+    // Tab switching
+    var tabs = modal.querySelectorAll('.auth-tab');
+    for (var j = 0; j < tabs.length; j++) {
+      tabs[j].addEventListener('click', function () {
+        setAuthTab(this.getAttribute('data-tab'));
+      });
+    }
+
+    // In-form tab switch links ("Don't have an account?" etc.)
+    var switchLinks = modal.querySelectorAll('[data-switch-tab]');
+    for (var k = 0; k < switchLinks.length; k++) {
+      switchLinks[k].addEventListener('click', function (e) {
+        e.preventDefault();
+        setAuthTab(this.getAttribute('data-switch-tab'));
+      });
+    }
+
+    // Sign In form
+    var signinForm = document.getElementById('signinForm');
+    if (signinForm) {
+      signinForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        handleSignIn();
+      });
+    }
+
+    // Sign Up form
+    var signupForm = document.getElementById('signupForm');
+    if (signupForm) {
+      signupForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        handleSignUp();
+      });
+    }
+
+    // Forgot password link
+    var forgotLink = document.getElementById('forgotPasswordLink');
+    if (forgotLink) {
+      forgotLink.addEventListener('click', function (e) {
+        e.preventDefault();
+        handleForgotPassword();
+      });
+    }
+  }
+
+  function openAuthModal() {
+    var modal = document.getElementById('authModal');
+    if (!modal) return;
+    modal.classList.add('open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    setTimeout(function () {
+      var first = modal.querySelector('.auth-form.is-active input');
+      if (first) first.focus();
+    }, 100);
+  }
+
+  function closeAuthModal() {
+    var modal = document.getElementById('authModal');
+    if (!modal) return;
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+  }
+
+  function setAuthTab(tab) {
+    var tabs  = document.querySelectorAll('.auth-tab');
+    var forms = document.querySelectorAll('.auth-form');
+    var title = document.getElementById('authTitle');
+    var sub   = document.querySelector('.auth-sub');
+
+    for (var i = 0; i < tabs.length; i++) {
+      var isActive = tabs[i].getAttribute('data-tab') === tab;
+      tabs[i].classList.toggle('is-active', isActive);
+      tabs[i].setAttribute('aria-selected', isActive ? 'true' : 'false');
+    }
+    for (var j = 0; j < forms.length; j++) {
+      forms[j].classList.toggle('is-active', forms[j].getAttribute('data-panel') === tab);
+    }
+    if (title && sub) {
+      if (tab === 'signup') {
+        title.textContent = 'Create your account';
+        sub.textContent = 'Start your Japan journey with a personalized dashboard.';
+      } else {
+        title.textContent = 'Welcome back';
+        sub.textContent = 'Sign in to track your application or create an account to get started.';
+      }
+    }
+  }
+
+  function handleSignIn() {
+    var email = getValue('signinEmail');
+    var password = getValue('signinPassword');
+
+    if (!email || !password) {
+      showToast('Please enter your email and password.', true);
+      return;
+    }
+
+    if (!supabaseClient) {
+      // Placeholder path — no backend wired yet
+      showToast('Sign-in is not connected yet. Add your Supabase credentials in script.js.', true);
+      return;
+    }
+
+    var btn = document.querySelector('#signinForm .auth-submit');
+    var originalText = btn.textContent;
+    btn.textContent = 'Signing in...';
+    btn.disabled = true;
+
+    supabaseClient.auth.signInWithPassword({ email: email, password: password })
+      .then(function (result) {
+        btn.textContent = originalText;
+        btn.disabled = false;
+        if (result.error) {
+          showToast(result.error.message || 'Sign-in failed.', true);
+          return;
+        }
+        showToast('Signed in! Redirecting to your dashboard...');
+        closeAuthModal();
+        // TODO: redirect to dashboard.html once built
+      })
+      .catch(function () {
+        btn.textContent = originalText;
+        btn.disabled = false;
+        showToast('Something went wrong. Please try again.', true);
+      });
+  }
+
+  function handleSignUp() {
+    var name     = getValue('signupName');
+    var email    = getValue('signupEmail');
+    var password = getValue('signupPassword');
+
+    if (!name || !email || !password) {
+      showToast('Please fill in all fields.', true);
+      return;
+    }
+    if (password.length < 8) {
+      showToast('Password must be at least 8 characters.', true);
+      return;
+    }
+
+    if (!supabaseClient) {
+      showToast('Account creation is not connected yet. Add your Supabase credentials in script.js.', true);
+      return;
+    }
+
+    var btn = document.querySelector('#signupForm .auth-submit');
+    var originalText = btn.textContent;
+    btn.textContent = 'Creating account...';
+    btn.disabled = true;
+
+    supabaseClient.auth.signUp({
+      email: email,
+      password: password,
+      options: { data: { full_name: name } }
+    })
+      .then(function (result) {
+        btn.textContent = originalText;
+        btn.disabled = false;
+        if (result.error) {
+          showToast(result.error.message || 'Sign-up failed.', true);
+          return;
+        }
+        showToast('Account created! Check your email to confirm.');
+        setAuthTab('signin');
+      })
+      .catch(function () {
+        btn.textContent = originalText;
+        btn.disabled = false;
+        showToast('Something went wrong. Please try again.', true);
+      });
+  }
+
+  function handleForgotPassword() {
+    var email = getValue('signinEmail');
+    if (!email) {
+      showToast('Enter your email above, then click "Forgot password?" again.', true);
+      return;
+    }
+    if (!supabaseClient) {
+      showToast('Password reset is not connected yet. Add your Supabase credentials in script.js.', true);
+      return;
+    }
+    supabaseClient.auth.resetPasswordForEmail(email)
+      .then(function (result) {
+        if (result.error) {
+          showToast(result.error.message || 'Could not send reset email.', true);
+        } else {
+          showToast('Password reset link sent to your email.');
+        }
+      })
+      .catch(function () {
+        showToast('Something went wrong. Please try again.', true);
+      });
+  }
+
+})();
