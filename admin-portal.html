@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Portal — Calestia Travel &amp; Tours</title>
+  <meta name="description" content="Administrator portal for Calestia Travel & Tours." />
+  <meta name="robots" content="noindex" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="portal.css" />
+  <link rel="icon" type="image/png" href="assets/images/calestia-logo.png" />
+</head>
+<body class="ps-body">
+
+  <div class="ps-gate" id="psGate"><span class="ps-gate-spinner"></span> Checking your access…</div>
+
+  <div class="ps-shell is-hidden" id="psShell">
+    <div class="ps-sidebar-backdrop" id="psSidebarBackdrop"></div>
+
+    <aside class="ps-sidebar" id="psSidebar">
+      <div class="ps-sidebar-head">
+        <button type="button" class="ps-sidebar-close" id="psSidebarClose" aria-label="Close menu">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+        <div class="ps-sidebar-brand">
+          <img src="assets/images/calestia-logo.png" alt="" />
+          <span>Calestia</span>
+        </div>
+        <span class="ps-role-pill">Admin Portal</span>
+      </div>
+
+      <nav class="ps-nav" id="psNav" role="tablist" aria-label="Admin portal navigation">
+        <button type="button" class="ps-nav-item is-active" data-panel="dashboard">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+          <span>Dashboard</span>
+        </button>
+        <button type="button" class="ps-nav-item" data-panel="employees">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <span>Employees</span>
+        </button>
+        <button type="button" class="ps-nav-item" data-panel="clients">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <span>Clients</span>
+        </button>
+        <button type="button" class="ps-nav-item" data-panel="applications">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5z"/><path d="M14 2v6h6"/></svg>
+          <span>Applications</span>
+        </button>
+        <button type="button" class="ps-nav-item" data-panel="documents">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 14 3.6 5.2A1.5 1.5 0 0 1 5 3.2h4.6a2 2 0 0 1 1.6.8l1.2 1.6a2 2 0 0 0 1.6.8H19a2 2 0 0 1 2 2v.6"/><path d="M2.5 9h17.7a2 2 0 0 1 1.9 2.6l-1.8 6a2 2 0 0 1-1.9 1.4H4.5a2 2 0 0 1-2-1.7Z"/></svg>
+          <span>Documents</span>
+        </button>
+        <button type="button" class="ps-nav-item" data-panel="audit">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-3"/><path d="M9 12h6M9 16h6M9 8h1"/></svg>
+          <span>Audit Logs</span>
+        </button>
+        <button type="button" class="ps-nav-item" data-panel="notifications">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg>
+          <span>Notifications</span>
+        </button>
+        <button type="button" class="ps-nav-item" data-panel="reports">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6"/><rect x="12" y="8" width="3" height="10"/><rect x="17" y="5" width="3" height="13"/></svg>
+          <span>Reports</span>
+        </button>
+        <button type="button" class="ps-nav-item" data-panel="settings">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.14.32.44.55 1.51.55Z"/></svg>
+          <span>Settings</span>
+        </button>
+      </nav>
+
+      <div class="ps-sidebar-user">
+        <div class="ps-avatar" id="psUserAvatar" style="background:#f59e0b;">A</div>
+        <div class="ps-sidebar-user-info">
+          <p id="psUserName">Loading…</p>
+          <span id="psUserEmail"></span>
+        </div>
+        <button type="button" class="ps-signout-btn" id="psSignoutBtn" aria-label="Sign out" title="Sign out">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+        </button>
+      </div>
+    </aside>
+
+    <div class="ps-main">
+      <header class="ps-topbar">
+        <button type="button" class="ps-menu-btn" id="psMenuBtn" aria-label="Open menu">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+        </button>
+        <div class="ps-topbar-title">
+          <h1 id="psPageTitle">Dashboard</h1>
+          <p id="psPageSubtitle">Administrator Portal · Calestia Travel &amp; Tours</p>
+        </div>
+        <div class="ps-topbar-actions" id="psTopbarActions">
+          <div class="ps-bell-wrap">
+            <button type="button" class="ps-bell-btn" id="psBellBtn" aria-label="Notifications" aria-expanded="false">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg>
+              <span class="ps-bell-badge is-hidden" id="psBellDot"></span>
+            </button>
+            <div class="ps-bell-panel is-hidden" id="psBellPanel">
+              <div class="ps-bell-panel-head">Recent Activity</div>
+              <div class="ps-bell-panel-list" id="psBellList"><p class="ps-hint" style="padding:16px;">Nothing yet.</p></div>
+            </div>
+          </div>
+          <a href="index.html" class="ps-btn ps-btn-outline ps-btn-sm">Back to Website</a>
+        </div>
+      </header>
+
+      <main class="ps-content">
+
+        <!-- ==================== DASHBOARD ==================== -->
+        <section class="ps-panel is-active" data-panel="dashboard">
+          <div class="ps-banner">
+            <div><span style="display:inline-block;background:#f59e0b;color:#fff;font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;padding:3px 10px;border-radius:20px;margin-bottom:8px;">Admin</span>
+            <h2>Administrator Dashboard</h2><p>Calestia Travel &amp; Tours</p></div>
+          </div>
+          <div class="ps-grid ps-grid-4" style="margin-bottom:20px;">
+            <div class="ps-stat"><p class="ps-stat-value" id="statTotalClients">—</p><p class="ps-stat-label">Total Clients</p></div>
+            <div class="ps-stat"><p class="ps-stat-value" id="statActiveEmployees">—</p><p class="ps-stat-label">Active Employees</p></div>
+            <div class="ps-stat"><p class="ps-stat-value" id="statMonthlyApps">—</p><p class="ps-stat-label">Applications This Month</p></div>
+            <div class="ps-stat"><p class="ps-stat-value" id="statAvgProcessing">—</p><p class="ps-stat-label">Avg. Days In Process</p></div>
+          </div>
+
+          <div class="ps-grid" style="grid-template-columns:2fr 1fr;margin-bottom:20px;">
+            <div class="ps-card ps-card-pad">
+              <h3 style="font-size:1rem;font-weight:700;color:var(--navy-dk);margin-bottom:16px;">Applications — Last 6 Months</h3>
+              <div class="ps-vbar-chart" id="psMonthlyChart"></div>
+            </div>
+            <div class="ps-card ps-card-pad">
+              <h3 style="font-size:1rem;font-weight:700;color:var(--navy-dk);margin-bottom:16px;text-align:center;">Approval Rate</h3>
+              <div id="psApprovalDonut"></div>
+            </div>
+          </div>
+
+          <div class="ps-grid" style="grid-template-columns:1fr 1fr;">
+            <div class="ps-card ps-card-pad">
+              <h3 style="font-size:1rem;font-weight:700;color:var(--navy-dk);margin-bottom:14px;">Recent Audit Activity</h3>
+              <div id="psRecentAudit"><p class="ps-hint">Loading…</p></div>
+            </div>
+            <div class="ps-card ps-card-pad">
+              <h3 style="font-size:1rem;font-weight:700;color:var(--navy-dk);margin-bottom:14px;">Staff Activity (30 days)</h3>
+              <div id="psStaffActivity"><p class="ps-hint">Loading…</p></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== EMPLOYEES ==================== -->
+        <section class="ps-panel" data-panel="employees">
+          <div class="ps-section-head"><div><h2>Employee Management</h2><p id="psEmployeesCount"></p></div>
+            <button type="button" class="ps-btn ps-btn-primary ps-btn-sm" id="psInviteBtn">Invite Employee</button>
+          </div>
+
+          <div class="ps-tabs">
+            <button type="button" class="ps-tab-btn is-active" data-emp-tab="active">Active</button>
+            <button type="button" class="ps-tab-btn" data-emp-tab="pending">Pending</button>
+            <button type="button" class="ps-tab-btn" data-emp-tab="suspended">Suspended</button>
+          </div>
+
+          <div id="psEmployeesGrid" class="ps-grid ps-grid-3"></div>
+        </section>
+
+        <!-- ==================== CLIENTS ==================== -->
+        <section class="ps-panel" data-panel="clients">
+          <div class="ps-section-head"><div><h2>All Clients</h2><p id="psAdminClientsCount"></p></div></div>
+          <div class="ps-toolbar">
+            <input type="text" id="clientSearch" placeholder="Search by name or email…" />
+            <select id="clientStatusFilter"><option value="">All Statuses</option></select>
+          </div>
+          <div class="ps-card">
+            <div class="ps-table-wrap">
+              <table class="ps-table">
+                <thead><tr><th>Client</th><th>Email</th><th>Status</th><th>Documents</th><th></th></tr></thead>
+                <tbody id="clientsTableBody"><tr><td colspan="5" class="ps-table-hint">Loading clients…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== APPLICATIONS ==================== -->
+        <section class="ps-panel" data-panel="applications">
+          <div class="ps-section-head"><div><h2>All Applications</h2><p>Organization-wide visa applications</p></div></div>
+          <div class="ps-grid ps-grid-4" style="margin-bottom:16px;" id="psAppStats"></div>
+          <div class="ps-card">
+            <div class="ps-table-wrap">
+              <table class="ps-table">
+                <thead><tr><th>Client</th><th>Status</th><th>Last Updated</th><th></th></tr></thead>
+                <tbody id="psAppTableBody"><tr><td colspan="4" class="ps-table-hint">Loading…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== DOCUMENTS ==================== -->
+        <section class="ps-panel" data-panel="documents">
+          <div class="ps-section-head"><div><h2>Document Overview</h2><p>Across all clients and employees</p></div></div>
+          <div class="ps-grid ps-grid-4" style="margin-bottom:16px;" id="psDocStats"></div>
+          <div class="ps-card">
+            <div class="ps-table-wrap">
+              <table class="ps-table">
+                <thead><tr><th>Client</th><th>Document</th><th>Status</th><th>Uploaded</th></tr></thead>
+                <tbody id="psDocTableBody"><tr><td colspan="4" class="ps-table-hint">Loading…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== AUDIT LOGS ==================== -->
+        <section class="ps-panel" data-panel="audit">
+          <div class="ps-section-head"><div><h2>Audit Logs</h2><p>Every status change, verification, and account change — recorded automatically</p></div>
+            <button type="button" class="ps-btn ps-btn-outline ps-btn-sm" id="psExportAuditBtn">Export CSV</button>
+          </div>
+          <div class="ps-card">
+            <div class="ps-table-wrap">
+              <table class="ps-table">
+                <thead><tr><th>When</th><th>Staff Member</th><th>Action</th><th>Client</th><th>Change</th></tr></thead>
+                <tbody id="auditTableBody"><tr><td colspan="5" class="ps-table-hint">Loading audit log…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== NOTIFICATIONS ==================== -->
+        <section class="ps-panel" data-panel="notifications">
+          <div class="ps-section-head"><div><h2>Notifications</h2></div></div>
+          <div id="psNotificationsFeed" style="display:flex;flex-direction:column;gap:10px;max-width:720px;"><p class="ps-hint">Loading…</p></div>
+        </section>
+
+        <!-- ==================== REPORTS ==================== -->
+        <section class="ps-panel" data-panel="reports">
+          <div class="ps-section-head"><div><h2>Reports &amp; Analytics</h2><p>Performance insights across the organization</p></div></div>
+          <div class="ps-grid ps-grid-4" style="margin-bottom:20px;" id="psReportStats"></div>
+          <div class="ps-grid" style="grid-template-columns:1fr 1fr;">
+            <div class="ps-card ps-card-pad">
+              <h3 style="font-size:1rem;font-weight:700;color:var(--navy-dk);margin-bottom:14px;">Monthly Trend</h3>
+              <div class="ps-vbar-chart" id="psReportMonthlyChart"></div>
+            </div>
+            <div class="ps-card ps-card-pad">
+              <h3 style="font-size:1rem;font-weight:700;color:var(--navy-dk);margin-bottom:14px;">Employee Performance (30 days)</h3>
+              <div id="psEmployeePerformance"><p class="ps-hint">Loading…</p></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== SETTINGS ==================== -->
+        <section class="ps-panel" data-panel="settings">
+          <div class="ps-section-head"><div><h2>Settings</h2></div></div>
+          <div style="max-width:520px;display:flex;flex-direction:column;gap:16px;">
+            <div class="ps-card ps-card-pad">
+              <h3 style="font-size:0.95rem;font-weight:700;color:var(--navy-dk);margin-bottom:10px;">Account</h3>
+              <div class="form-group"><label>Display Name</label><input type="text" id="settingsFullName" /></div>
+              <button type="button" class="ps-btn ps-btn-primary" id="settingsSaveNameBtn">Save Changes</button>
+            </div>
+            <div class="ps-card ps-card-pad">
+              <h3 style="font-size:0.95rem;font-weight:700;color:var(--navy-dk);margin-bottom:6px;">Notifications</h3>
+              <div id="psNotifPrefs"></div>
+            </div>
+          </div>
+        </section>
+
+      </main>
+
+      <footer style="padding:20px 30px;text-align:center;">
+        <p class="ps-hint">© 2026 Calestia Travel &amp; Tours. All rights reserved.</p>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ==================== INVITE EMPLOYEE MODAL ==================== -->
+  <div class="ps-modal" id="inviteModal" aria-hidden="true">
+    <div class="ps-modal-backdrop" data-close-modal="inviteModal"></div>
+    <div class="ps-modal-card" role="dialog" aria-modal="true">
+      <div class="ps-modal-head">
+        <div><h2>Invite Employee</h2></div>
+        <button type="button" class="auth-close" data-close-modal="inviteModal" aria-label="Close">✕</button>
+      </div>
+      <div class="ps-modal-body">
+        <div class="ps-doc-remark is-positive" style="margin-bottom:16px;">
+          <span>Only administrators can create employee accounts. Nobody can register as staff on their own. Supabase will email them a secure link to set their password — the account stays Pending until you activate it here.</span>
+        </div>
+        <form id="inviteEmployeeForm">
+          <div class="form-group"><label>Email Address</label><input type="email" id="inviteEmail" placeholder="employee@calestia.com" required /></div>
+          <div class="form-group"><label>Role</label>
+            <select id="inviteRole"><option value="employee">Employee</option><option value="admin">Administrator</option></select>
+          </div>
+          <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:6px;">
+            <button type="button" class="ps-btn ps-btn-outline" data-close-modal="inviteModal">Cancel</button>
+            <button type="submit" class="ps-btn ps-btn-primary">Send Invitation</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="config.js"></script>
+  <script src="portal-icons.js"></script>
+  <script src="staff-shared.js"></script>
+  <script src="admin-portal.js"></script>
+</body>
+</html>

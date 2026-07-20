@@ -1,0 +1,569 @@
+/* ==========================================================================
+   Calestia Travel & Tours — Portal Shell stylesheet
+   ==========================================================================
+   Shared sidebar/topbar/card design system for client-portal.html,
+   employee-portal.html and admin-portal.html. Loaded ALONGSIDE style.css
+   (not instead of it) — reuses style.css's tokens (--navy, --sky-lt,
+   --shadow, --radius, Poppins) and shared helpers (.btn-primary,
+   .btn-outline, .form-group, #toast, .auth-close) rather than redefining
+   them. Every class here is prefixed `ps-` (Portal Shell) so nothing
+   collides with the marketing-site CSS in style.css.
+
+   Not loaded by index.html or any other marketing page.
+   ========================================================================== */
+
+:root {
+  --ps-bg: #f4f7fb;
+  --ps-border: #eef2f7;
+  --ps-text-dim: #6b7f99;
+  --ps-navy-grad: linear-gradient(160deg, var(--navy-dk) 0%, var(--navy) 100%);
+}
+
+/* ==========================================================================
+   1. Page scaffold
+   ========================================================================== */
+html.ps-html, body.ps-body {
+  height: 100%;
+  background: var(--ps-bg);
+}
+.ps-shell {
+  display: flex;
+  min-height: 100vh;
+  background: var(--ps-bg);
+}
+
+/* Loading gate shown while we confirm the session/role before rendering
+   anything — mirrors the old #staffGate pattern, now shared by all three
+   portals. */
+.ps-gate {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ps-text-dim);
+  font-size: 0.95rem;
+  gap: 10px;
+}
+.ps-gate-spinner {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  border: 2.5px solid var(--sky-lt);
+  border-top-color: var(--navy);
+  animation: ps-spin 0.7s linear infinite;
+}
+@keyframes ps-spin { to { transform: rotate(360deg); } }
+
+
+/* ==========================================================================
+   2. Sidebar
+   ========================================================================== */
+.ps-sidebar {
+  width: 264px;
+  flex-shrink: 0;
+  min-height: 100vh;
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  background: var(--ps-navy-grad);
+  display: flex;
+  flex-direction: column;
+  z-index: 40;
+}
+.ps-sidebar-head {
+  padding: 26px 22px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.ps-sidebar-brand {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+}
+.ps-sidebar-brand img { width: 30px; height: 30px; border-radius: 9px; object-fit: contain; background: rgba(255,255,255,0.15); padding: 3px; }
+.ps-sidebar-brand span { color: var(--white); font-weight: 700; font-size: 1.05rem; letter-spacing: -0.01em; }
+.ps-role-pill {
+  display: inline-block;
+  font-size: 0.68rem; font-weight: 600;
+  color: rgba(255,255,255,0.85);
+  background: rgba(255,255,255,0.14);
+  padding: 4px 12px; border-radius: 30px;
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.ps-sidebar-close {
+  display: none;
+  position: absolute; top: 20px; right: 16px;
+  background: none; border: none; color: rgba(255,255,255,0.7);
+  font-size: 1.2rem; cursor: pointer; line-height: 1;
+}
+
+.ps-nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 12px;
+}
+.ps-nav-item {
+  width: 100%;
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 13px;
+  border-radius: 13px;
+  margin-bottom: 3px;
+  background: none; border: none;
+  color: rgba(255,255,255,0.68);
+  font-family: inherit; font-size: 0.88rem; font-weight: 500;
+  text-align: left; cursor: pointer;
+  position: relative;
+  transition: background 0.15s, color 0.15s;
+}
+.ps-nav-item:hover { background: rgba(255,255,255,0.08); color: var(--white); }
+.ps-nav-item.is-active { background: rgba(255,255,255,0.16); color: var(--white); }
+.ps-nav-item.is-active::after {
+  content: '';
+  position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+  width: 3px; height: 22px; border-radius: 4px; background: var(--white);
+}
+.ps-nav-item svg { flex-shrink: 0; width: 18px; height: 18px; }
+.ps-nav-item-badge {
+  margin-left: auto;
+  background: #ef4444; color: var(--white);
+  font-size: 0.66rem; font-weight: 700;
+  min-width: 19px; padding: 1px 6px;
+  border-radius: 30px; text-align: center;
+}
+
+.ps-sidebar-user {
+  padding: 12px;
+  margin: 0 12px 16px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.08);
+  display: flex; align-items: center; gap: 10px;
+}
+.ps-sidebar-user-info { flex: 1; min-width: 0; }
+.ps-sidebar-user-info p { color: var(--white); font-size: 0.85rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ps-sidebar-user-info span { color: rgba(255,255,255,0.5); font-size: 0.72rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.ps-signout-btn {
+  background: none; border: none; color: rgba(255,255,255,0.45); cursor: pointer;
+  padding: 6px; border-radius: 8px; flex-shrink: 0; display: flex;
+  transition: color 0.15s;
+}
+.ps-signout-btn:hover { color: var(--white); }
+
+.ps-sidebar-backdrop {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(15, 25, 40, 0.5);
+  z-index: 35;
+}
+
+
+/* ==========================================================================
+   3. Topbar + main content
+   ========================================================================== */
+.ps-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ps-topbar {
+  position: sticky; top: 0; z-index: 30;
+  background: var(--white);
+  border-bottom: 1px solid var(--ps-border);
+  padding: 16px 20px;
+  display: flex; align-items: center; gap: 14px;
+}
+.ps-menu-btn {
+  display: none;
+  background: none; border: none; color: var(--navy-dk); cursor: pointer;
+  padding: 4px;
+}
+.ps-topbar-title { flex: 1; min-width: 0; }
+.ps-topbar-title h1 { font-size: 1.15rem; font-weight: 700; color: var(--navy-dk); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ps-topbar-title p { font-size: 0.76rem; color: var(--ps-text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ps-topbar-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+
+.ps-bell-wrap { position: relative; }
+.ps-bell-btn {
+  background: none; border: none; cursor: pointer;
+  color: var(--navy-dk); position: relative;
+  padding: 8px; border-radius: 12px; display: flex;
+}
+.ps-bell-btn:hover { background: var(--ps-bg); }
+.ps-bell-badge {
+  position: absolute; top: 5px; right: 5px;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #ef4444;
+}
+.ps-bell-panel {
+  position: absolute; right: 0; top: calc(100% + 8px);
+  width: min(340px, 90vw);
+  background: var(--white);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--ps-border);
+  max-height: 420px; overflow-y: auto;
+  z-index: 50;
+}
+.ps-bell-panel-head {
+  padding: 14px 16px; font-weight: 700; font-size: 0.85rem;
+  color: var(--navy-dk); border-bottom: 1px solid var(--ps-border);
+}
+.ps-bell-panel-list { padding: 6px; }
+
+.ps-content {
+  flex: 1;
+  padding: 20px;
+  min-width: 0;
+}
+@media (min-width: 900px) { .ps-content { padding: 30px 34px; } }
+
+.ps-panel { display: none; }
+.ps-panel.is-active { display: block; animation: ps-fade-in 0.25s ease; }
+@keyframes ps-fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+
+/* ==========================================================================
+   4. Section header + cards + stat tiles
+   ========================================================================== */
+.ps-section-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 14px; margin-bottom: 20px; flex-wrap: wrap;
+}
+.ps-section-head h2 { font-size: 1.25rem; font-weight: 700; color: var(--navy-dk); }
+.ps-section-head p { font-size: 0.85rem; color: var(--ps-text-dim); margin-top: 3px; }
+
+.ps-card {
+  background: var(--white);
+  border-radius: 18px;
+  border: 1px solid var(--ps-border);
+  box-shadow: 0 2px 10px rgba(51, 86, 134, 0.05);
+}
+.ps-card-pad { padding: 20px; }
+.ps-card-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 18px 20px; border-bottom: 1px solid var(--ps-border);
+}
+.ps-card-head h3 { font-size: 1rem; font-weight: 700; color: var(--navy-dk); }
+
+.ps-grid { display: grid; gap: 16px; }
+.ps-grid-2 { grid-template-columns: repeat(2, 1fr); }
+.ps-grid-3 { grid-template-columns: repeat(3, 1fr); }
+.ps-grid-4 { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 1024px) { .ps-grid-3, .ps-grid-4 { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 620px) { .ps-grid-2, .ps-grid-3, .ps-grid-4 { grid-template-columns: 1fr; } }
+
+.ps-stat {
+  background: var(--white);
+  border-radius: 16px;
+  border: 1px solid var(--ps-border);
+  padding: 18px;
+}
+.ps-stat-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 14px; }
+.ps-stat-icon {
+  width: 42px; height: 42px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.ps-stat-icon svg { width: 19px; height: 19px; }
+.ps-stat-value { font-size: 1.55rem; font-weight: 700; color: var(--navy-dk); line-height: 1.1; }
+.ps-stat-label { font-size: 0.82rem; color: var(--ps-text-dim); margin-top: 2px; }
+.ps-stat-delta {
+  font-size: 0.7rem; font-weight: 600;
+  background: #ecfdf5; color: #059669;
+  padding: 3px 9px; border-radius: 10px;
+}
+
+
+/* ==========================================================================
+   5. Badges, avatars, buttons
+   ========================================================================== */
+.ps-badge {
+  display: inline-flex; align-items: center;
+  padding: 3px 11px; border-radius: 30px;
+  font-size: 0.72rem; font-weight: 600;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.ps-badge-blue   { background: #eff6ff; color: #1d4ed8; border-color: #dbeafe; }
+.ps-badge-green  { background: #ecfdf5; color: #047857; border-color: #d1fae5; }
+.ps-badge-amber  { background: #fffbeb; color: #b45309; border-color: #fef3c7; }
+.ps-badge-red    { background: #fef2f2; color: #b91c1c; border-color: #fee2e2; }
+.ps-badge-gray   { background: #f8fafc; color: #475569; border-color: #e2e8f0; }
+.ps-badge-purple { background: #f5f3ff; color: #6d28d9; border-color: #ede9fe; }
+
+.ps-avatar {
+  width: 38px; height: 38px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--white); font-weight: 700; font-size: 0.85rem;
+  background: var(--navy); flex-shrink: 0;
+}
+.ps-avatar-sm { width: 32px; height: 32px; font-size: 0.75rem; }
+.ps-avatar-lg { width: 50px; height: 50px; font-size: 1.1rem; }
+
+.ps-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: inherit; font-weight: 600; font-size: 0.85rem;
+  padding: 10px 18px; border-radius: 12px;
+  cursor: pointer; border: none;
+  transition: transform 0.15s, opacity 0.15s;
+}
+.ps-btn:active { transform: scale(0.97); }
+.ps-btn-primary { background: var(--navy); color: var(--white); }
+.ps-btn-primary:hover { opacity: 0.92; }
+.ps-btn-outline { background: var(--white); border: 1.5px solid #dbe9f7; color: var(--navy-dk); }
+.ps-btn-outline:hover { background: var(--sky-lt); }
+.ps-btn-danger { background: #fef2f2; color: #b91c1c; border: 1.5px solid #fee2e2; }
+.ps-btn-danger:hover { background: #fee2e2; }
+.ps-btn-sm { padding: 7px 13px; font-size: 0.78rem; }
+.ps-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+
+/* ==========================================================================
+   6. Tables
+   ========================================================================== */
+.ps-table-wrap { overflow-x: auto; border-radius: 16px; }
+.ps-table { width: 100%; border-collapse: collapse; min-width: 640px; }
+.ps-table th {
+  text-align: left; padding: 12px 16px;
+  font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--ps-text-dim); border-bottom: 1px solid var(--ps-border);
+  white-space: nowrap;
+}
+.ps-table td {
+  padding: 13px 16px; font-size: 0.86rem; color: var(--navy-dk);
+  border-bottom: 1px solid var(--ps-border);
+}
+.ps-table tr:last-child td { border-bottom: none; }
+.ps-table tr:hover td { background: var(--ps-bg); }
+.ps-table-hint { color: var(--ps-text-dim); font-size: 0.85rem; text-align: center; padding: 24px !important; }
+
+
+/* ==========================================================================
+   7. Modals
+   ========================================================================== */
+.ps-modal {
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.2s;
+}
+.ps-modal.is-open { opacity: 1; pointer-events: auto; }
+.ps-modal-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(15, 25, 40, 0.5);
+  backdrop-filter: blur(3px);
+}
+.ps-modal-card {
+  position: relative;
+  background: var(--white);
+  border-radius: 22px;
+  width: 100%; max-width: 560px;
+  max-height: 88vh; overflow-y: auto;
+  box-shadow: 0 30px 80px rgba(31, 58, 95, 0.25);
+  transform: translateY(16px); transition: transform 0.2s;
+}
+.ps-modal.is-open .ps-modal-card { transform: translateY(0); }
+.ps-modal-card-lg { max-width: 720px; }
+.ps-modal-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 22px 24px 16px; border-bottom: 1px solid var(--ps-border);
+}
+.ps-modal-head h2 { font-size: 1.15rem; font-weight: 700; color: var(--navy-dk); }
+.ps-modal-head p { font-size: 0.82rem; color: var(--ps-text-dim); margin-top: 3px; }
+.ps-modal-body { padding: 20px 24px 24px; }
+.ps-modal-section { margin-bottom: 22px; }
+.ps-modal-section:last-child { margin-bottom: 0; }
+.ps-modal-section h3 { font-size: 0.88rem; font-weight: 700; color: var(--navy-dk); margin-bottom: 10px; }
+
+
+/* ==========================================================================
+   8. Empty states, hints, misc
+   ========================================================================== */
+.ps-empty {
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  padding: 50px 20px;
+}
+.ps-empty-icon {
+  width: 56px; height: 56px; border-radius: 18px;
+  background: var(--sky-lt); color: var(--navy);
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 16px;
+}
+.ps-empty h3 { font-size: 1rem; font-weight: 700; color: var(--navy-dk); margin-bottom: 4px; }
+.ps-empty p { font-size: 0.85rem; color: var(--ps-text-dim); max-width: 320px; margin-bottom: 16px; }
+
+.ps-hint { color: var(--ps-text-dim); font-size: 0.85rem; }
+.ps-banner {
+  border-radius: 18px;
+  padding: 22px 24px;
+  background: linear-gradient(135deg, var(--navy-dk) 0%, var(--navy) 60%, var(--navy-lt) 100%);
+  color: var(--white);
+  margin-bottom: 20px;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+}
+.ps-banner h2 { font-size: 1.35rem; font-weight: 700; margin-bottom: 4px; }
+.ps-banner p { font-size: 0.85rem; color: rgba(255,255,255,0.75); }
+.ps-banner-chip {
+  background: rgba(255,255,255,0.14);
+  border-radius: 14px;
+  padding: 10px 18px;
+  text-align: center;
+}
+.ps-banner-chip strong { display: block; font-size: 1.3rem; color: var(--white); }
+.ps-banner-chip span { font-size: 0.68rem; color: rgba(255,255,255,0.7); }
+
+.ps-tabs { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+.ps-tab-btn {
+  padding: 8px 16px; border-radius: 12px;
+  font-family: inherit; font-size: 0.82rem; font-weight: 600;
+  background: var(--white); border: 1px solid var(--ps-border); color: var(--ps-text-dim);
+  cursor: pointer;
+}
+.ps-tab-btn.is-active { background: var(--navy); color: var(--white); border-color: var(--navy); }
+
+.ps-toolbar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+.ps-toolbar input[type="text"],
+.ps-toolbar input[type="search"],
+.ps-toolbar select {
+  padding: 10px 14px; border-radius: 12px;
+  border: 1.5px solid var(--ps-border); background: var(--white);
+  font-family: inherit; font-size: 0.85rem; color: var(--navy-dk);
+}
+.ps-toolbar input[type="text"] { flex: 1; min-width: 180px; }
+
+
+/* ==========================================================================
+   9. Toggle switch (Settings)
+   ========================================================================== */
+.ps-toggle-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 13px 0; border-bottom: 1px solid var(--ps-border);
+}
+.ps-toggle-row:last-child { border-bottom: none; }
+.ps-toggle-row span { font-size: 0.86rem; color: var(--navy-dk); }
+.ps-toggle {
+  position: relative; width: 40px; height: 22px;
+  border-radius: 30px; background: #d7e2ee;
+  border: none; cursor: pointer; flex-shrink: 0;
+  transition: background 0.15s;
+}
+.ps-toggle::after {
+  content: '';
+  position: absolute; top: 2px; left: 2px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--white); box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  transition: transform 0.15s;
+}
+.ps-toggle.is-on { background: var(--navy); }
+.ps-toggle.is-on::after { transform: translateX(18px); }
+
+
+/* ==========================================================================
+   10. Status timeline (Client Dashboard)
+   ========================================================================== */
+.ps-timeline { position: relative; padding-left: 4px; }
+.ps-timeline-rail {
+  position: absolute; left: 15px; top: 6px; bottom: 6px; width: 2px;
+  background: linear-gradient(to bottom, #10b981, var(--ps-border));
+}
+.ps-timeline-item { display: flex; gap: 14px; position: relative; padding: 8px 0; }
+.ps-timeline-dot {
+  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--ps-border); z-index: 1;
+}
+.ps-timeline-dot.is-done { background: #10b981; color: var(--white); }
+.ps-timeline-dot.is-active { background: var(--sky-lt); border: 2px solid var(--navy); }
+.ps-timeline-dot svg { width: 15px; height: 15px; }
+.ps-timeline-item p.ps-tl-label { font-size: 0.88rem; font-weight: 600; color: #b7c3d2; }
+.ps-timeline-item.is-done p.ps-tl-label,
+.ps-timeline-item.is-active p.ps-tl-label { color: var(--navy-dk); }
+.ps-timeline-item p.ps-tl-sub { font-size: 0.72rem; margin-top: 1px; }
+.ps-timeline-item.is-done p.ps-tl-sub { color: #059669; }
+.ps-timeline-item.is-active p.ps-tl-sub { color: var(--navy); font-weight: 600; }
+
+
+/* ==========================================================================
+   11. Charts — hand-rolled SVG, no external dependency
+   ========================================================================== */
+.ps-donut-wrap { display: flex; flex-direction: column; align-items: center; }
+.ps-donut { position: relative; width: 132px; height: 132px; }
+.ps-donut svg { transform: rotate(-90deg); }
+.ps-donut-center {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.ps-donut-center strong { font-size: 1.4rem; color: var(--navy-dk); }
+.ps-donut-center span { font-size: 0.7rem; color: var(--ps-text-dim); }
+
+.ps-bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.ps-bar-row:last-child { margin-bottom: 0; }
+.ps-bar-track { flex: 1; height: 7px; border-radius: 30px; background: var(--ps-border); overflow: hidden; }
+.ps-bar-fill { height: 100%; border-radius: 30px; background: linear-gradient(90deg, var(--navy), var(--navy-lt)); }
+
+.ps-vbar-chart { display: flex; align-items: flex-end; gap: 8px; height: 160px; padding-top: 10px; }
+.ps-vbar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.ps-vbar { width: 100%; border-radius: 6px 6px 0 0; background: var(--sky-lt); position: relative; min-height: 4px; }
+.ps-vbar-fill { position: absolute; bottom: 0; left: 0; right: 0; border-radius: 6px 6px 0 0; background: var(--navy); }
+.ps-vbar-col span { font-size: 0.68rem; color: var(--ps-text-dim); }
+
+
+/* ==========================================================================
+   12. Document / review rows (Employee & Admin document review, Client docs)
+   ========================================================================== */
+.ps-doc-card {
+  border: 1px solid var(--ps-border); border-radius: 16px; padding: 16px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.ps-doc-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.ps-doc-card-top h4 { font-size: 0.88rem; font-weight: 700; color: var(--navy-dk); }
+.ps-doc-card-top p { font-size: 0.75rem; color: var(--ps-text-dim); margin-top: 2px; }
+.ps-doc-file-chip {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--sky-lt); border-radius: 10px; padding: 8px 10px;
+  font-size: 0.78rem; color: var(--navy-dk); overflow: hidden;
+}
+.ps-doc-file-chip span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ps-doc-remark {
+  display: flex; gap: 8px; padding: 9px 11px; border-radius: 10px; font-size: 0.76rem;
+}
+.ps-doc-remark.is-negative { background: #fef2f2; color: #b91c1c; }
+.ps-doc-remark.is-positive { background: #ecfdf5; color: #065f46; }
+.ps-doc-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.ps-doc-actions .ps-btn { flex: 1; justify-content: center; }
+
+.ps-remark-item { display: flex; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--ps-border); }
+.ps-remark-item:last-child { border-bottom: none; }
+.ps-remark-item p.ps-remark-meta { font-size: 0.78rem; font-weight: 600; color: var(--navy-dk); }
+.ps-remark-item p.ps-remark-body { font-size: 0.82rem; color: #445a73; margin-top: 2px; line-height: 1.5; }
+.ps-remark-item span.ps-remark-time { font-size: 0.7rem; color: var(--ps-text-dim); flex-shrink: 0; }
+
+.ps-add-note-row { display: flex; gap: 10px; margin-top: 12px; align-items: flex-end; flex-wrap: wrap; }
+.ps-add-note-row textarea {
+  flex: 1; min-width: 200px; min-height: 64px; resize: vertical;
+  border: 1.5px solid var(--ps-border); border-radius: 12px; padding: 10px 13px;
+  font-family: inherit; font-size: 0.85rem; color: var(--navy-dk);
+}
+.ps-add-note-row textarea:focus { outline: none; border-color: var(--sky-dk); }
+
+
+/* ==========================================================================
+   13. Responsive — sidebar becomes an off-canvas drawer below 1024px
+   ========================================================================== */
+@media (max-width: 1024px) {
+  .ps-sidebar {
+    position: fixed; top: 0; left: 0; height: 100vh;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    width: 268px;
+  }
+  .ps-shell.ps-sidebar-open .ps-sidebar { transform: translateX(0); }
+  .ps-shell.ps-sidebar-open .ps-sidebar-backdrop { display: block; }
+  .ps-sidebar-close { display: block; }
+  .ps-menu-btn { display: flex; }
+}
+
+@media (max-width: 640px) {
+  .ps-topbar { padding: 14px 16px; }
+  .ps-content { padding: 16px; }
+  .ps-modal-card { max-height: 92vh; }
+  .ps-banner { padding: 18px; }
+  .ps-doc-actions .ps-btn { flex: 1 1 100%; }
+}

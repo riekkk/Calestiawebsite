@@ -35,30 +35,19 @@
 
       <div id="inviteInvalid" class="is-hidden">
         <h2 class="auth-title">This invitation isn't valid</h2>
-        <p class="auth-sub" id="inviteInvalidReason">It may have expired or already been used. Ask your administrator to send a new one.</p>
+        <p class="auth-sub">It may have expired or already been used. Ask your administrator to send a new one.</p>
         <a href="index.html" class="btn-primary" style="width:100%; justify-content:center;">Back to Website</a>
-      </div>
-
-      <div id="inviteMismatch" class="is-hidden">
-        <h2 class="auth-title">Wrong account</h2>
-        <p class="auth-sub">You're signed in as <span id="mismatchCurrentEmail"></span>, but this invitation is for <span id="mismatchInviteEmail"></span>. Sign out first, then open this link again.</p>
-        <button type="button" class="auth-submit js-signout">Sign Out</button>
       </div>
 
       <div id="inviteAccepted" class="is-hidden">
         <h2 class="auth-title">You're in!</h2>
-        <p class="auth-sub">Your account has been created as <strong id="acceptedRole"></strong>. An administrator still needs to activate it before you can sign in to the staff portal — they've been notified automatically once they check the Employees tab.</p>
+        <p class="auth-sub">Your password is set as <strong id="acceptedRole"></strong>. An administrator still needs to activate your account before you can sign in to the staff portal — they've been notified automatically once they check the Employees tab.</p>
         <a href="index.html" class="btn-primary" style="width:100%; justify-content:center;">Back to Website</a>
-      </div>
-
-      <div id="inviteConfirmEmail" class="is-hidden">
-        <h2 class="auth-title">Check your email</h2>
-        <p class="auth-sub">We sent a confirmation link to <span id="confirmEmailAddress"></span>. Click it, and you'll be brought right back here to finish.</p>
       </div>
 
       <form id="inviteForm" class="is-hidden" novalidate>
         <h2 class="auth-title">You're invited</h2>
-        <p class="auth-sub">Join Calestia Travel &amp; Tours as <strong id="inviteRoleLabel"></strong> — <span id="inviteEmailLabel"></span>. Create a password to accept.</p>
+        <p class="auth-sub">Join Calestia Travel &amp; Tours as <strong id="inviteRoleLabel"></strong> — <span id="inviteEmailLabel"></span>. Create a password to activate your account.</p>
 
         <div class="form-group">
           <label for="invitePassword">Password</label>
@@ -68,26 +57,7 @@
           <label for="invitePasswordConfirm">Confirm Password</label>
           <input type="password" id="invitePasswordConfirm" placeholder="Re-enter your password" autocomplete="new-password" minlength="8" required />
         </div>
-        <button type="submit" class="auth-submit">Create Account &amp; Accept</button>
-        <p class="auth-switch">
-          Already have a Calestia account?
-          <a href="#" id="switchToSignIn">Sign in instead</a>
-        </p>
-      </form>
-
-      <form id="inviteSignInForm" class="is-hidden" novalidate>
-        <h2 class="auth-title">Sign in to accept</h2>
-        <p class="auth-sub">Sign in with your existing account for <span id="signinEmailLabel"></span> to accept this invitation.</p>
-
-        <div class="form-group">
-          <label for="inviteSigninPassword">Password</label>
-          <input type="password" id="inviteSigninPassword" placeholder="••••••••" autocomplete="current-password" required />
-        </div>
-        <button type="submit" class="auth-submit">Sign In &amp; Accept</button>
-        <p class="auth-switch">
-          Need to create a password instead?
-          <a href="#" id="switchToSignUp">Create account</a>
-        </p>
+        <button type="submit" class="auth-submit">Set Password</button>
       </form>
     </div>
   </main>

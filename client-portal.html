@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Calestia Travel &amp; Tours</title>
+  <title>Client Portal — Calestia Travel &amp; Tours</title>
   <meta name="description" content="Manage your Japan visa applications, bookings, and travel documents with Calestia Travel & Tours." />
   <meta name="robots" content="noindex" />
 
@@ -11,105 +11,333 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="portal.css" />
   <link rel="icon" type="image/png" href="assets/images/calestia-logo.png" />
 </head>
-<body data-protected="true">
+<body class="ps-body">
 
-  <nav class="portal-nav">
-    <a href="index.html" class="portal-nav-logo">
-      <img src="assets/images/calestia-logo.png" alt="Calestia logo" />
-      <span>Calestia Client Portal</span>
-    </a>
-    <div class="portal-nav-actions">
-      <div class="portal-bell-wrap">
-        <button type="button" class="portal-bell-btn" id="notifBellBtn" aria-label="Notifications" aria-expanded="false">
-          🔔<span class="portal-bell-badge is-hidden" id="notifBadge">0</span>
+  <!-- Shown while we confirm the session; hidden once the portal is ready -->
+  <div class="ps-gate" id="psGate"><span class="ps-gate-spinner"></span> Loading your portal…</div>
+
+  <div class="ps-shell is-hidden" id="psShell">
+
+    <div class="ps-sidebar-backdrop" id="psSidebarBackdrop"></div>
+
+    <aside class="ps-sidebar" id="psSidebar">
+      <div class="ps-sidebar-head">
+        <button type="button" class="ps-sidebar-close" id="psSidebarClose" aria-label="Close menu">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
         </button>
-        <div class="portal-bell-panel is-hidden" id="notifPanel">
-          <div class="portal-bell-panel-head">Notifications</div>
-          <div class="portal-bell-panel-list" id="notifList">
-            <p class="portal-hint">No notifications yet.</p>
+        <div class="ps-sidebar-brand">
+          <img src="assets/images/calestia-logo.png" alt="" />
+          <span>Calestia</span>
+        </div>
+        <span class="ps-role-pill">Client Portal</span>
+      </div>
+
+      <nav class="ps-nav" id="psNav" role="tablist" aria-label="Client portal navigation">
+        <button type="button" class="ps-nav-item is-active" data-panel="dashboard">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+          <span>Dashboard</span>
+        </button>
+        <button type="button" class="ps-nav-item" data-panel="documents">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h6M9 9h1"/></svg>
+          <span>My Documents</span>
+          <span class="ps-nav-item-badge is-hidden" id="psNavDocsBadge">0</span>
+        </button>
+        <button type="button" class="ps-nav-item" data-panel="forms">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 20h16"/></svg>
+          <span>Forms &amp; Checklist</span>
+        </button>
+        <button type="button" class="ps-nav-item" data-panel="notifications">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg>
+          <span>Notifications</span>
+          <span class="ps-nav-item-badge is-hidden" id="psNavNotifBadge">0</span>
+        </button>
+        <button type="button" class="ps-nav-item" data-panel="reviews">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 2.6a.55.55 0 0 1 1 0l2.6 5.3 5.8.9c.5.07.7.7.35 1.06l-4.2 4.1 1 5.8a.55.55 0 0 1-.8.58l-5.2-2.7-5.2 2.7a.55.55 0 0 1-.8-.58l1-5.8-4.2-4.1a.55.55 0 0 1 .35-1.06l5.8-.9Z"/></svg>
+          <span>Reviews</span>
+        </button>
+        <button type="button" class="ps-nav-item" data-panel="profile">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <span>Profile</span>
+        </button>
+      </nav>
+
+      <div class="ps-sidebar-user">
+        <div class="ps-avatar" id="psUserAvatar">C</div>
+        <div class="ps-sidebar-user-info">
+          <p id="psUserName">Loading…</p>
+          <span id="psUserEmail"></span>
+        </div>
+        <button type="button" class="ps-signout-btn" id="psSignoutBtn" aria-label="Sign out" title="Sign out">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+        </button>
+      </div>
+    </aside>
+
+    <div class="ps-main">
+      <header class="ps-topbar">
+        <button type="button" class="ps-menu-btn" id="psMenuBtn" aria-label="Open menu">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+        </button>
+        <div class="ps-topbar-title">
+          <h1 id="psPageTitle">Dashboard</h1>
+          <p id="psPageSubtitle">Welcome back</p>
+        </div>
+        <div class="ps-topbar-actions">
+          <div class="ps-bell-wrap">
+            <button type="button" class="ps-bell-btn" id="psBellBtn" aria-label="Notifications" aria-expanded="false">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg>
+              <span class="ps-bell-badge is-hidden" id="psBellDot"></span>
+            </button>
+            <div class="ps-bell-panel is-hidden" id="psBellPanel">
+              <div class="ps-bell-panel-head">Notifications</div>
+              <div class="ps-bell-panel-list" id="psBellList"><p class="ps-hint" style="padding:16px;">No notifications yet.</p></div>
+            </div>
           </div>
+          <a href="index.html" class="ps-btn ps-btn-outline ps-btn-sm">Back to Website</a>
         </div>
-      </div>
-      <a href="index.html" class="portal-nav-link">&larr; Back to Website</a>
-      <button type="button" class="portal-signout-btn js-signout">Sign Out</button>
+      </header>
+
+      <main class="ps-content">
+
+        <!-- ==================== DASHBOARD ==================== -->
+        <section class="ps-panel is-active" data-panel="dashboard">
+          <div class="ps-banner">
+            <div>
+              <h2>Welcome back, <span id="psBannerName">traveler</span></h2>
+              <p id="psBannerSub">Japan Tourist Visa</p>
+            </div>
+            <div class="ps-banner-chip">
+              <strong id="psBannerStatus">—</strong>
+              <span>Current status</span>
+            </div>
+          </div>
+
+          <div class="ps-grid ps-grid-4" style="margin-bottom:20px;">
+            <div class="ps-stat">
+              <div class="ps-stat-top"><div class="ps-stat-icon" style="background:#eff6ff;color:#1d4ed8;">
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5z"/><path d="M14 2v6h6"/></svg>
+              </div></div>
+              <p class="ps-stat-value" id="statDocsSubmitted">—</p>
+              <p class="ps-stat-label">Documents Submitted</p>
+            </div>
+            <div class="ps-stat">
+              <div class="ps-stat-top"><div class="ps-stat-icon" style="background:#f5f3ff;color:#6d28d9;">
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+              </div></div>
+              <p class="ps-stat-value" id="statDaysInProcess">—</p>
+              <p class="ps-stat-label">Days in Process</p>
+            </div>
+            <div class="ps-stat">
+              <div class="ps-stat-top"><div class="ps-stat-icon" style="background:#fffbeb;color:#b45309;">
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v5M12 16h.01"/></svg>
+              </div></div>
+              <p class="ps-stat-value" id="statPendingActions">—</p>
+              <p class="ps-stat-label">Pending Actions</p>
+            </div>
+            <div class="ps-stat">
+              <div class="ps-stat-top"><div class="ps-stat-icon" style="background:#ecfdf5;color:#059669;">
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg>
+              </div></div>
+              <p class="ps-stat-value" id="statUnreadNotifs">—</p>
+              <p class="ps-stat-label">Unread Notifications</p>
+            </div>
+          </div>
+
+          <div class="ps-grid" style="grid-template-columns: 2fr 1fr;">
+            <div class="ps-card ps-card-pad">
+              <h3 style="font-size:1rem;font-weight:700;color:var(--navy-dk);margin-bottom:16px;">Application Progress</h3>
+              <div class="ps-timeline" id="psTimeline">
+                <p class="ps-hint">Loading your application status…</p>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:16px;">
+              <div class="ps-card ps-card-pad">
+                <h3 style="font-size:0.95rem;font-weight:700;color:var(--navy-dk);margin-bottom:12px;">Quick Actions</h3>
+                <div style="display:flex;flex-direction:column;gap:8px;">
+                  <button type="button" class="ps-btn ps-btn-outline" style="width:100%;justify-content:flex-start;" data-goto-panel="documents">Upload Document</button>
+                  <button type="button" class="ps-btn ps-btn-outline" style="width:100%;justify-content:flex-start;" data-goto-panel="forms">Download Forms</button>
+                  <a href="index.html#contact" class="ps-btn ps-btn-outline" style="width:100%;justify-content:flex-start;">Contact Support</a>
+                  <a href="tour-packages.html" class="ps-btn ps-btn-outline" style="width:100%;justify-content:flex-start;">Book a Tour</a>
+                </div>
+              </div>
+              <div class="ps-card ps-card-pad">
+                <h3 style="font-size:0.95rem;font-weight:700;color:var(--navy-dk);margin-bottom:12px;">Recent Activity</h3>
+                <div id="psRecentActivity"><p class="ps-hint">Loading…</p></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== MY DOCUMENTS ==================== -->
+        <section class="ps-panel" data-panel="documents">
+          <div class="ps-section-head">
+            <div>
+              <h2>My Documents</h2>
+              <p>Upload and manage all required visa documents. Accepted formats: PDF, JPG, PNG. Max 10&nbsp;MB.</p>
+            </div>
+          </div>
+          <div class="ps-grid ps-grid-3" id="psDocumentsGrid">
+            <p class="ps-hint">Loading your documents…</p>
+          </div>
+        </section>
+
+        <!-- ==================== FORMS & CHECKLIST ==================== -->
+        <section class="ps-panel" data-panel="forms">
+          <div class="ps-section-head">
+            <div>
+              <h2>Forms &amp; Checklist</h2>
+              <p>Review and download these before submitting your documents.</p>
+            </div>
+          </div>
+          <div class="ps-grid ps-grid-3" id="psFormsGrid"></div>
+        </section>
+
+        <!-- ==================== NOTIFICATIONS ==================== -->
+        <section class="ps-panel" data-panel="notifications">
+          <div class="ps-section-head">
+            <div><h2>Notifications</h2></div>
+            <button type="button" class="ps-btn ps-btn-outline ps-btn-sm" id="psMarkAllReadBtn">Mark all read</button>
+          </div>
+          <div id="psNotificationsList" style="max-width:720px;display:flex;flex-direction:column;gap:10px;">
+            <p class="ps-hint">Loading…</p>
+          </div>
+        </section>
+
+        <!-- ==================== REVIEWS ==================== -->
+        <section class="ps-panel" data-panel="reviews">
+          <div class="ps-section-head">
+            <div>
+              <h2>Client Reviews</h2>
+              <p>See what other clients say about us.</p>
+            </div>
+            <button type="button" class="ps-btn ps-btn-primary ps-btn-sm" id="psWriteReviewBtn">Write a Review</button>
+          </div>
+
+          <div class="ps-card ps-card-pad" style="margin-bottom:20px;">
+            <div style="display:flex;flex-wrap:wrap;align-items:center;gap:32px;">
+              <div style="text-align:center;">
+                <p style="font-size:2.6rem;font-weight:700;color:var(--navy);" id="psReviewAvg">—</p>
+                <p class="ps-hint" id="psReviewCount">Based on 0 reviews</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="ps-grid ps-grid-3" id="psReviewsGrid">
+            <p class="ps-hint">Loading reviews…</p>
+          </div>
+        </section>
+
+        <!-- ==================== PROFILE ==================== -->
+        <section class="ps-panel" data-panel="profile">
+          <div class="ps-section-head">
+            <div><h2>My Profile</h2></div>
+            <button type="button" class="ps-btn ps-btn-primary ps-btn-sm" id="psEditProfileBtn">Edit Profile</button>
+          </div>
+          <div class="ps-grid" style="grid-template-columns: 1fr 2fr;">
+            <div class="ps-card ps-card-pad" style="text-align:center;">
+              <div class="ps-avatar ps-avatar-lg" id="psProfileAvatar" style="margin:0 auto 14px;">C</div>
+              <h3 id="psProfileName" style="font-size:1rem;font-weight:700;color:var(--navy-dk);">—</h3>
+              <p class="ps-hint">Client Account</p>
+            </div>
+            <div class="ps-card ps-card-pad">
+              <h3 style="font-size:0.95rem;font-weight:700;color:var(--navy-dk);margin-bottom:16px;">Personal Information</h3>
+              <form class="ps-grid ps-grid-2" id="psProfileForm">
+                <div class="form-group"><label>Full Name</label><input type="text" id="pfFullName" disabled /></div>
+                <div class="form-group"><label>Email Address</label><input type="email" id="pfEmail" disabled /></div>
+                <div class="form-group"><label>Phone Number</label><input type="tel" id="pfPhone" disabled placeholder="+63 912 345 6789" /></div>
+                <div class="form-group"><label>Nationality</label><input type="text" id="pfNationality" disabled placeholder="Filipino" /></div>
+                <div class="form-group"><label>Passport Number</label><input type="text" id="pfPassport" disabled placeholder="P1234567A" /></div>
+                <div class="form-group"><label>Date of Birth</label><input type="date" id="pfDob" disabled /></div>
+              </form>
+              <div id="psProfileSaveRow" class="is-hidden" style="margin-top:8px;">
+                <button type="button" class="ps-btn ps-btn-primary" id="psSaveProfileBtn">Save Changes</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </main>
+
+      <footer style="padding:20px 30px;text-align:center;">
+        <p class="ps-hint">© 2026 Calestia Travel &amp; Tours. All rights reserved.</p>
+      </footer>
     </div>
-  </nav>
+  </div>
 
-  <main class="portal-main">
-    <div class="portal-hero">
-      <h1>Welcome back, <span class="js-portal-username">traveler</span></h1>
-      <p>Manage your visa application, documents, and remarks in one secure place. Signed in as <span class="js-portal-email"></span>.</p>
-    </div>
-
-    <div class="portal-container">
-      <div class="portal-card">
-        <h2>My Visa Application</h2>
-        <div class="status-track" id="statusTrack" aria-label="Application status">
-          <p class="portal-hint">Loading your application status...</p>
-        </div>
+  <!-- ==================== UPLOAD DOCUMENT MODAL ==================== -->
+  <div class="ps-modal" id="uploadModal" aria-hidden="true">
+    <div class="ps-modal-backdrop" data-close-modal="uploadModal"></div>
+    <div class="ps-modal-card" role="dialog" aria-modal="true">
+      <div class="ps-modal-head">
+        <div><h2 id="uploadModalTitle">Upload Document</h2></div>
+        <button type="button" class="auth-close" data-close-modal="uploadModal" aria-label="Close">✕</button>
       </div>
-
-      <div class="portal-card">
-        <div class="portal-card-head">
-          <h2>My Documents</h2>
-          <a href="forms-checklist.html" class="portal-action" style="padding:10px 18px;">📄 Forms &amp; Checklist</a>
+      <div class="ps-modal-body">
+        <input type="file" id="uploadFileInput" accept=".pdf,.jpg,.jpeg,.png" style="display:none;" />
+        <div id="uploadDropzone" style="border:2px dashed #dbe9f7;background:var(--sky-lt);border-radius:18px;padding:40px 20px;text-align:center;cursor:pointer;">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--navy);margin:0 auto 10px;"><path d="M12 20V8"/><path d="m7 13 5-5 5 5"/><path d="M4 20h16"/></svg>
+          <p style="font-weight:600;color:var(--navy-dk);margin-bottom:4px;">Click to choose a file</p>
+          <p class="ps-hint">PDF, JPG, JPEG, PNG · Max 10&nbsp;MB</p>
+          <p class="ps-hint" id="uploadSelectedFileName" style="margin-top:10px;font-weight:600;"></p>
         </div>
-        <p class="portal-hint" style="margin-top:-8px; margin-bottom:16px;">Accepted formats: PDF, JPG, JPEG, PNG. Max file size 10&nbsp;MB. You can replace a file any time before it's verified.</p>
-        <div class="portal-table-wrap">
-          <table class="portal-table">
-            <thead>
-              <tr>
-                <th>Requirement</th>
-                <th>Details</th>
-                <th>File</th>
-                <th>Status</th>
-                <th>Remarks</th>
-              </tr>
-            </thead>
-            <tbody id="documentsTableBody">
-              <tr><td colspan="5" class="portal-hint">Loading your documents...</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="portal-card">
-        <h2>Remarks from Calestia</h2>
-        <div class="portal-remarks-list" id="remarksList">
-          <p class="portal-hint">No remarks yet.</p>
-        </div>
-      </div>
-
-      <div class="portal-card">
-        <h2>Quick Actions</h2>
-        <div class="portal-actions-grid">
-          <a href="tour-packages.html" class="portal-action">Book a Tour</a>
-          <a href="index.html#services" class="portal-action">Apply for Visa</a>
-          <a href="forms-checklist.html" class="portal-action">Forms &amp; Checklist</a>
-          <a href="index.html#contact" class="portal-action">Contact Calestia</a>
+        <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
+          <button type="button" class="ps-btn ps-btn-outline" data-close-modal="uploadModal">Cancel</button>
+          <button type="button" class="ps-btn ps-btn-primary" id="uploadConfirmBtn" disabled>Upload</button>
         </div>
       </div>
     </div>
-  </main>
+  </div>
 
-  <footer>
-    <div class="footer-bottom">
-      <p>© 2026 Calestia Travel &amp; Tours. All rights reserved.</p>
+  <!-- ==================== WRITE A REVIEW MODAL ==================== -->
+  <div class="ps-modal" id="reviewModal" aria-hidden="true">
+    <div class="ps-modal-backdrop" data-close-modal="reviewModal"></div>
+    <div class="ps-modal-card" role="dialog" aria-modal="true">
+      <div class="ps-modal-head">
+        <div><h2 id="reviewModalTitle">Leave a Review</h2></div>
+        <button type="button" class="auth-close" data-close-modal="reviewModal" aria-label="Close">✕</button>
+      </div>
+      <div class="ps-modal-body">
+        <div class="form-group">
+          <label>Service</label>
+          <select id="reviewService">
+            <option>Japan Visa Assistance</option>
+            <option>Flight Booking</option>
+            <option>Hotel &amp; Accommodation</option>
+            <option>Domestic Tour</option>
+            <option>International Tour</option>
+            <option>Travel Insurance</option>
+            <option>Airport Transfers</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Your Rating</label>
+          <div id="reviewStarPicker" style="display:flex;gap:4px;"></div>
+        </div>
+        <div class="form-group">
+          <label>Your Experience</label>
+          <textarea id="reviewText" rows="4" placeholder="Share your experience with Calestia Travel & Tours..."></textarea>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:10px;">
+          <button type="button" class="ps-btn ps-btn-outline" data-close-modal="reviewModal">Cancel</button>
+          <button type="button" class="ps-btn ps-btn-primary" id="reviewSubmitBtn">Submit Review</button>
+        </div>
+      </div>
     </div>
-  </footer>
+  </div>
 
   <!-- ==================== TOAST ==================== -->
   <div id="toast" role="status" aria-live="polite"></div>
 
-  <!-- Supabase SDK (auth + data) -->
+  <!-- Supabase SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-
-  <!-- Supabase project config (URL + public anon key) + shared portal constants -->
+  <!-- Supabase project config + shared portal constants -->
   <script src="config.js"></script>
-
-  <!-- App logic -->
-  <script src="script.js"></script>
+  <!-- Shared icon set -->
+  <script src="portal-icons.js"></script>
+  <!-- Client portal logic (self-contained) -->
+  <script src="client-portal.js"></script>
 </body>
 </html>

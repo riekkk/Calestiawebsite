@@ -12,9 +12,10 @@ window.CALESTIA_SUPABASE_URL = 'https://bhhmlxjrklrjkqxoumfk.supabase.co';
 window.CALESTIA_SUPABASE_ANON_KEY = 'sb_publishable_tSAwI-7s5WNHyLBU4bTihA_j8qFxxwC';
 
 /* ==========================================================================
-   Shared portal constants — used by both client-portal.html (uploads) and
-   staff-portal.html (review) so the two stay in lockstep. Keys match the
-   CHECK constraints in supabase/portal-schema.sql exactly.
+   Shared portal constants — used by client-portal.html (uploads) and by
+   employee-portal.html/admin-portal.html (review) so they all stay in
+   lockstep. Keys match the CHECK constraints in supabase/portal-schema.sql
+   exactly.
    ========================================================================== */
 window.CALESTIA_DOCUMENT_TYPES = [
   { key: 'passport', label: 'Passport', description: 'Self-signed passport bio page. Include your old passport too if your last Japan visa is in it.' },
@@ -48,3 +49,75 @@ window.CALESTIA_DOCUMENT_STATUSES = [
   { key: 'rejected', label: 'Rejected' },
   { key: 'reupload_requested', label: 'Re-upload Requested' }
 ];
+
+/* ==========================================================================
+   Forms & Checklist — same PDFs/copy as forms-checklist.html (assets/forms/),
+   rendered as an in-portal tab by client-portal.js so clients don't have to
+   leave the portal shell to grab a form.
+   ========================================================================== */
+window.CALESTIA_FORMS = [
+  {
+    title: 'Visa Application Form',
+    description: 'The official Japan visa application form. Must be typed, not handwritten.',
+    file: 'assets/forms/visa-application-form.pdf',
+    icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h6M9 9h1"/>'
+  },
+  {
+    title: 'Itinerary Form',
+    description: 'List your entry/departure dates and accommodation details in Japan.',
+    file: 'assets/forms/itinerary-form.pdf',
+    icon: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18M8 2v4M16 2v4M8 15h3"/>'
+  },
+  {
+    title: 'Multiple Entry Request Form',
+    description: "Required only if you're applying for a multiple-entry visa.",
+    file: 'assets/forms/multiple-entry-request-form.pdf',
+    icon: '<path d="M6 12 3.3 3.1A59.8 59.8 0 0 1 21.5 12 59.8 59.8 0 0 1 3.3 20.9L6 12Zm0 0h7.5"/>'
+  },
+  {
+    title: 'Full Requirements Checklist',
+    description: 'The complete tourism visa checklist — every document you may need, with detailed remarks.',
+    file: 'assets/forms/full-requirements-checklist.pdf',
+    icon: '<path d="M9 12.75 11.25 15 15 9.75m-3-7.04A11.96 11.96 0 0 1 3.6 6 12 12 0 0 0 3 9.75c0 5.6 3.8 10.3 9 11.62 5.2-1.33 9-6.02 9-11.62 0-1.31-.21-2.57-.6-3.75h-.15c-3.2 0-6.1-1.25-8.25-3.29Z"/>'
+  },
+  {
+    title: 'Authorization Letter',
+    description: 'Authorize a representative to file your application or claim your passport on your behalf.',
+    file: 'assets/forms/authorization-letter.pdf',
+    icon: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'
+  },
+  {
+    title: 'Japan Visa Guidelines',
+    description: 'Key rules on timelines, form formatting, and paper size before you submit.',
+    file: 'assets/forms/japan-visa-guidelines.pdf',
+    icon: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-2 2-2 3.5M12 17h.01"/>'
+  },
+  {
+    title: 'Guarantee Letter',
+    description: 'For applicants whose travel expenses are shouldered by a guarantor in the Philippines.',
+    file: 'assets/forms/guarantee-letter.pdf',
+    icon: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>'
+  }
+];
+
+/* ==========================================================================
+   Role → portal file map. Used after sign-in / password reset to land each
+   account on the right portal, and by each portal's own gate to bounce a
+   signed-in visitor of the wrong role to where they actually belong.
+   ========================================================================== */
+window.CALESTIA_ROLE_PORTAL_URLS = {
+  client: 'client-portal.html',
+  employee: 'employee-portal.html',
+  admin: 'admin-portal.html'
+};
+
+/* ==========================================================================
+   EmailJS — used ONLY by the public contact form (see script.js). Employee
+   invitations no longer use EmailJS at all — they go through Supabase
+   Auth's own invite email (auth.admin.inviteUserByEmail), sent by the
+   invite-employee Edge Function. Customize that email's subject/body in
+   your Supabase Dashboard → Authentication → Email Templates → "Invite
+   user", not here.
+   ========================================================================== */
+window.CALESTIA_EMAILJS_PUBLIC_KEY = 'Bp_1nflmnjqr7recy';
+window.CALESTIA_EMAILJS_SERVICE_ID = 'service_y33oto9';
