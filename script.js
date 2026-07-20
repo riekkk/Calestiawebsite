@@ -14,7 +14,8 @@
   var EMAILJS_SERVICE_ID = 'service_y33oto9';
   var EMAILJS_TEMPLATE_ID = 'template_svk1i9k';
 
-  // Supabase config — fill these in to enable auth
+  // Supabase config — normally supplied by config.js (window.CALESTIA_SUPABASE_*).
+  // These are just a fallback so the file still makes sense if config.js is missing.
   var SUPABASE_URL = 'YOUR_SUPABASE_URL_HERE';
   var SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY_HERE';
 
@@ -30,10 +31,13 @@
   function init() {
     initEmailJS();
     initPetals();
+    initSupabase();
     initNav();
     initContactForm();
     initFadeInObserver();
     initAuthModal();
+    initAuthState();
+    initResetPassword();
   }
 
   /* ==================================================================
@@ -85,18 +89,26 @@
   }
 
   /* ==================================================================
-     3. Nav toggle (mobile menu + auth button clone)
+     3. Nav toggle (mobile menu + auth buttons)
      ================================================================== */
   function initNav() {
     var hamburger  = document.getElementById('hamburger');
     var mobileMenu = document.getElementById('mobileMenu');
-    var mmPanel    = document.getElementById('mmPanel');
     var closeMenu  = document.getElementById('closeMenu');
     var authTrigger = document.getElementById('authTriggerBtn');
+    var mmAuthBtn = document.getElementById('mmAuthBtn');
 
     // Desktop auth button opens the modal
     if (authTrigger) {
       authTrigger.addEventListener('click', openAuthModal);
+    }
+
+    // Mobile auth button opens the modal (and closes the mobile menu)
+    if (mmAuthBtn) {
+      mmAuthBtn.addEventListener('click', function () {
+        if (mobileMenu) mobileMenu.classList.remove('open');
+        openAuthModal();
+      });
     }
 
     // Backdrop click closes menu
@@ -104,20 +116,6 @@
       mobileMenu.addEventListener('click', function (e) {
         if (e.target === mobileMenu) mobileMenu.classList.remove('open');
       });
-    }
-
-    // Inject a matching auth button into the mobile menu
-    if (mmPanel && authTrigger && !document.getElementById('mmAuthBtn')) {
-      var mmAuthBtn = document.createElement('button');
-      mmAuthBtn.type = 'button';
-      mmAuthBtn.id = 'mmAuthBtn';
-      mmAuthBtn.className = 'mm-auth-btn';
-      mmAuthBtn.textContent = authTrigger.textContent;
-      mmAuthBtn.addEventListener('click', function () {
-        if (mobileMenu) mobileMenu.classList.remove('open');
-        openAuthModal();
-      });
-      mmPanel.appendChild(mmAuthBtn);
     }
 
     // Hamburger open
@@ -247,25 +245,26 @@
   }
 
   /* ==================================================================
-     7. Auth Modal (Supabase-ready)
-     ==================================================================
-     UI is fully wired. To enable real auth:
-       1. Uncomment the Supabase <script> in index.html <head>.
-       2. Fill in SUPABASE_URL and SUPABASE_ANON_KEY above.
-       3. The functions below will pick it up automatically.
+     7. Supabase client (auth)
      ================================================================== */
   var supabaseClient = null;
 
+  function initSupabase() {
+    var url = window.CALESTIA_SUPABASE_URL || SUPABASE_URL;
+    var key = window.CALESTIA_SUPABASE_ANON_KEY || SUPABASE_ANON_KEY;
+    if (typeof window.supabase !== 'undefined' &&
+        url && url.indexOf('YOUR_') !== 0 &&
+        key && key.indexOf('YOUR_') !== 0) {
+      supabaseClient = window.supabase.createClient(url, key);
+    }
+  }
+
+  /* ==================================================================
+     8. Auth Modal
+     ================================================================== */
   function initAuthModal() {
     var modal = document.getElementById('authModal');
     if (!modal) return;
-
-    // Init Supabase if available and configured
-    if (typeof window.supabase !== 'undefined' &&
-        SUPABASE_URL && SUPABASE_URL.indexOf('YOUR_') !== 0 &&
-        SUPABASE_ANON_KEY && SUPABASE_ANON_KEY.indexOf('YOUR_') !== 0) {
-      supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    }
 
     // Listen for the custom "open auth" event (kept for backward compat with old TSX)
     window.addEventListener('calestia:auth-open', openAuthModal);
@@ -384,7 +383,7 @@
 
     if (!supabaseClient) {
       // Placeholder path — no backend wired yet
-      showToast('Sign-in is not connected yet. Add your Supabase credentials in script.js.', true);
+      showToast('Sign-in is not connected yet. Check config.js.', true);
       return;
     }
 
@@ -401,9 +400,9 @@
           showToast(result.error.message || 'Sign-in failed.', true);
           return;
         }
-        showToast('Signed in! Redirecting to your dashboard...');
+        showToast('Signed in! Redirecting to your client portal...');
         closeAuthModal();
-        // TODO: redirect to dashboard.html once built
+        setTimeout(function () { window.location.href = 'client-portal.html'; }, 700);
       })
       .catch(function () {
         btn.textContent = originalText;
@@ -427,7 +426,7 @@
     }
 
     if (!supabaseClient) {
-      showToast('Account creation is not connected yet. Add your Supabase credentials in script.js.', true);
+      showToast('Account creation is not connected yet. Check config.js.', true);
       return;
     }
 
@@ -465,10 +464,12 @@
       return;
     }
     if (!supabaseClient) {
-      showToast('Password reset is not connected yet. Add your Supabase credentials in script.js.', true);
+      showToast('Password reset is not connected yet. Check config.js.', true);
       return;
     }
-    supabaseClient.auth.resetPasswordForEmail(email)
+    supabaseClient.auth.resetPasswordForEmail(email, {
+      redirectTo: new URL('reset-password.html', window.location.href).href
+    })
       .then(function (result) {
         if (result.error) {
           showToast(result.error.message || 'Could not send reset email.', true);
@@ -479,6 +480,139 @@
       .catch(function () {
         showToast('Something went wrong. Please try again.', true);
       });
+  }
+
+  /* ==================================================================
+     9. Auth state (nav UI, session persistence, protected pages)
+     ================================================================== */
+  function initAuthState() {
+    var signOutBtns = document.querySelectorAll('.js-signout');
+    for (var i = 0; i < signOutBtns.length; i++) {
+      signOutBtns[i].addEventListener('click', handleSignOut);
+    }
+
+    if (!supabaseClient) {
+      // No Supabase config available — protected pages can't verify a
+      // session, so send visitors back to the homepage.
+      if (document.body.hasAttribute('data-protected')) {
+        window.location.href = 'index.html';
+      }
+      return;
+    }
+
+    // Fires on sign-in, sign-out, token refresh, and on page load once the
+    // session is restored from localStorage (session persistence).
+    supabaseClient.auth.onAuthStateChange(function (event, session) {
+      updateAuthUI(session);
+      if (event === 'SIGNED_OUT' && document.body.hasAttribute('data-protected')) {
+        window.location.href = 'index.html';
+      }
+    });
+
+    supabaseClient.auth.getSession().then(function (result) {
+      var session = result.data && result.data.session;
+      updateAuthUI(session);
+      if (document.body.hasAttribute('data-protected') && !session) {
+        window.location.href = 'index.html';
+      }
+    });
+  }
+
+  function updateAuthUI(session) {
+    var signedIn = !!(session && session.user);
+
+    var slotsOut = document.querySelectorAll('.auth-slot-signed-out');
+    var slotsIn  = document.querySelectorAll('.auth-slot-signed-in');
+    for (var i = 0; i < slotsOut.length; i++) slotsOut[i].classList.toggle('is-hidden', signedIn);
+    for (var j = 0; j < slotsIn.length; j++)  slotsIn[j].classList.toggle('is-hidden', !signedIn);
+
+    if (!signedIn) return;
+
+    var meta = session.user.user_metadata || {};
+    var fullName = meta.full_name || [meta.first_name, meta.last_name].filter(Boolean).join(' ') || session.user.email;
+    var firstName = fullName.split(' ')[0];
+
+    var portalLinks = document.querySelectorAll('.js-portal-link');
+    for (var k = 0; k < portalLinks.length; k++) portalLinks[k].textContent = 'Hi, ' + firstName;
+
+    var nameEls = document.querySelectorAll('.js-portal-username');
+    for (var m = 0; m < nameEls.length; m++) nameEls[m].textContent = fullName;
+
+    var emailEls = document.querySelectorAll('.js-portal-email');
+    for (var n = 0; n < emailEls.length; n++) emailEls[n].textContent = session.user.email;
+  }
+
+  function handleSignOut() {
+    if (!supabaseClient) return;
+    supabaseClient.auth.signOut().then(function (result) {
+      if (result.error) {
+        showToast(result.error.message || 'Could not sign out.', true);
+        return;
+      }
+      showToast('Signed out.');
+      if (document.body.hasAttribute('data-protected')) {
+        window.location.href = 'index.html';
+      }
+    });
+  }
+
+  /* ==================================================================
+     10. Password reset (reset-password.html)
+     ================================================================== */
+  function initResetPassword() {
+    var form = document.getElementById('resetPasswordForm');
+    if (!form) return;
+
+    if (!supabaseClient) {
+      showToast('Password reset is not connected. Check config.js.', true);
+      return;
+    }
+
+    // Supabase parses the recovery token from the URL when the client loads
+    // and fires this event once that temporary session is ready.
+    supabaseClient.auth.onAuthStateChange(function (event) {
+      if (event === 'PASSWORD_RECOVERY') {
+        var notice = document.getElementById('resetPasswordNotice');
+        if (notice) notice.textContent = 'Enter your new password below.';
+      }
+    });
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var pw  = getValue('newPassword');
+      var pw2 = getValue('confirmNewPassword');
+
+      if (!pw || pw.length < 8) {
+        showToast('Password must be at least 8 characters.', true);
+        return;
+      }
+      if (pw !== pw2) {
+        showToast('Passwords do not match.', true);
+        return;
+      }
+
+      var btn = form.querySelector('.auth-submit');
+      var originalText = btn.textContent;
+      btn.textContent = 'Updating...';
+      btn.disabled = true;
+
+      supabaseClient.auth.updateUser({ password: pw })
+        .then(function (result) {
+          btn.textContent = originalText;
+          btn.disabled = false;
+          if (result.error) {
+            showToast(result.error.message || 'Could not update password.', true);
+            return;
+          }
+          showToast('Password updated! Redirecting to your client portal...');
+          setTimeout(function () { window.location.href = 'client-portal.html'; }, 900);
+        })
+        .catch(function () {
+          btn.textContent = originalText;
+          btn.disabled = false;
+          showToast('Something went wrong. Please try again.', true);
+        });
+    });
   }
 
 })();

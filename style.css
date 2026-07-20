@@ -104,6 +104,23 @@ section { padding: 100px 8vw; position: relative; }
 }
 .nav-auth-btn:hover { background: var(--navy-lt); }
 
+.is-hidden { display: none !important; }
+
+.nav-user-slot { display: flex; align-items: center; gap: 8px; }
+.nav-signout-btn {
+  background: transparent;
+  color: var(--navy-dk);
+  border: 1.5px solid #dde5ee;
+  padding: 8px 15px;
+  border-radius: 30px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.2s, border-color 0.2s;
+}
+.nav-signout-btn:hover { background: var(--sky-lt); border-color: var(--sky); }
+
 .hamburger { display: none; flex-direction: column; gap: 5px; cursor: pointer; }
 .hamburger span { width: 24px; height: 2px; background: var(--navy-dk); }
 
@@ -652,7 +669,100 @@ footer {
 
 
 /* ==========================================================================
-   14. Placeholder subpage styles (flight-booking.html, etc.)
+   14. Client Portal (protected page)
+   ========================================================================== */
+.portal-nav {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 6vw;
+  background: var(--navy-dk);
+  font-family: 'Poppins', sans-serif;
+}
+.portal-nav-logo { display: flex; align-items: center; gap: 10px; }
+.portal-nav-logo img { width: 32px; height: 32px; object-fit: contain; }
+.portal-nav-logo span { font-weight: 700; color: var(--white); font-size: 1rem; }
+.portal-nav-actions { display: flex; align-items: center; gap: 14px; }
+.portal-nav-link { color: #dbe4ee; font-size: 0.85rem; font-weight: 600; }
+.portal-nav-link:hover { opacity: 0.8; }
+.portal-signout-btn {
+  background: transparent; color: #dbe4ee;
+  border: 1.5px solid rgba(219,228,238,0.4);
+  padding: 8px 16px; border-radius: 30px;
+  font-weight: 600; font-size: 0.82rem; cursor: pointer;
+  font-family: inherit; transition: background 0.2s, border-color 0.2s;
+}
+.portal-signout-btn:hover { background: rgba(255,255,255,0.08); border-color: #dbe4ee; }
+
+.portal-main { background: var(--sky-lt); min-height: 80vh; padding: 0 0 80px; }
+.portal-hero {
+  background: linear-gradient(160deg, var(--navy-dk), var(--navy));
+  padding: 60px 6vw; color: var(--white);
+}
+.portal-hero h1 { font-size: 2.2rem; font-weight: 700; margin-bottom: 10px; letter-spacing: -0.01em; }
+.portal-hero p { color: #dbe4ee; font-size: 0.98rem; max-width: 560px; }
+
+.portal-container { max-width: 1100px; margin: -34px auto 0; padding: 0 6vw; }
+.portal-card {
+  background: var(--white); border-radius: 20px; padding: 28px;
+  box-shadow: 0 12px 40px rgba(40,64,94,0.1); margin-bottom: 36px;
+}
+.portal-card h2 { font-size: 1.05rem; font-weight: 700; color: var(--navy-dk); margin-bottom: 18px; }
+.portal-card-head {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 20px; flex-wrap: wrap; gap: 12px;
+}
+.portal-card-head h2 { margin-bottom: 0; }
+
+.portal-status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 14px; }
+.portal-status { background: var(--sky-lt); border-radius: 14px; padding: 18px; text-align: center; transition: transform 0.2s; }
+.portal-status:hover { transform: translateY(-2px); }
+.portal-status-count { font-size: 1.4rem; font-weight: 700; }
+.portal-status-label { font-size: 0.78rem; color: #5c7a9c; font-weight: 600; }
+.portal-hint { font-size: 0.82rem; color: #93aecb; margin-top: 16px; }
+.portal-hint a { color: var(--navy); font-weight: 600; }
+.portal-hint a:hover { opacity: 0.72; }
+
+.portal-table-wrap { overflow-x: auto; border: 1px solid var(--sky-lt); border-radius: 16px; }
+.portal-table { width: 100%; border-collapse: collapse; min-width: 900px; }
+.portal-table th {
+  background: var(--sky-lt); padding: 14px; text-align: left;
+  font-size: 0.85rem; color: var(--navy-dk);
+}
+.portal-table td { padding: 14px; border-top: 1px solid var(--sky-lt); vertical-align: top; font-size: 0.82rem; }
+.portal-attach-btn {
+  background: var(--navy); color: var(--white); border: none; border-radius: 8px;
+  padding: 8px 14px; cursor: pointer; font-weight: 600; font-family: inherit;
+}
+.portal-status-pill {
+  background: #FFF4D6; color: #A66A00; padding: 6px 10px;
+  border-radius: 999px; font-size: 0.8rem; font-weight: 600;
+}
+
+.portal-actions-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px; }
+.portal-action {
+  background: var(--sky-lt); border-radius: 14px; padding: 20px 12px; text-align: center;
+  color: var(--navy-dk); font-weight: 600; font-size: 0.82rem;
+  transition: background 0.2s, color 0.2s, transform 0.2s, box-shadow 0.2s;
+}
+.portal-action:hover { background: var(--navy); color: var(--white); transform: translateY(-2px); box-shadow: 0 10px 24px rgba(59,85,131,0.25); }
+
+
+/* ==========================================================================
+   15. Password reset page
+   ========================================================================== */
+.reset-wrap {
+  min-height: calc(100vh - 90px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 60px 6vw; background: var(--sky-lt);
+}
+.reset-card {
+  background: var(--white); border-radius: var(--radius); padding: 44px 36px;
+  max-width: 440px; width: 100%; box-shadow: var(--shadow);
+}
+.reset-card .auth-brand { justify-content: center; }
+
+
+/* ==========================================================================
+   16. Placeholder subpage styles (flight-booking.html, etc.)
    ========================================================================== */
 .coming-soon {
   min-height: calc(100vh - 200px);
@@ -688,7 +798,7 @@ footer {
 
 
 /* ==========================================================================
-   15. Responsive — Tablet & Down
+   17. Responsive — Tablet & Down
    ========================================================================== */
 @media (max-width: 900px) {
   .hero { grid-template-columns: 1fr; padding-top: 60px; }
@@ -706,7 +816,7 @@ footer {
 
 
 /* ==========================================================================
-   16. Mobile Responsiveness Patch
+   18. Mobile Responsiveness Patch
    ========================================================================== */
 .hero h1 { font-size: clamp(1.9rem, 6vw, 3.2rem) !important; }
 .section-title { font-size: clamp(1.5rem, 4.5vw, 2.2rem) !important; }
@@ -751,7 +861,10 @@ a { -webkit-tap-highlight-color: transparent; }
   text-align: center;
   cursor: pointer;
   font-family: inherit;
+  display: block;
 }
+.mm-user-slot { width: 100%; display: flex; flex-direction: column; gap: 12px; }
+.mm-signout-btn { background: var(--white); color: var(--navy-dk); border: 1.5px solid #dde5ee; }
 
 @media (max-width: 1024px) {
   section { padding: clamp(50px, 8vw, 90px) 6vw; }
@@ -790,7 +903,7 @@ a { -webkit-tap-highlight-color: transparent; }
 
 
 /* ==========================================================================
-   17. Accessibility — reduced motion
+   19. Accessibility — reduced motion
    ========================================================================== */
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }

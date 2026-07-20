@@ -31,10 +31,14 @@
       <li><a href="#requirements">Requirements</a></li>
       <li><a href="#why">Why Us</a></li>
       <li><a href="#contact" class="nav-cta">Get Started</a></li>
-      <li>
+      <li class="auth-slot-signed-out">
         <button type="button" id="authTriggerBtn" class="nav-auth-btn">
           Sign In / Create Account
         </button>
+      </li>
+      <li class="auth-slot-signed-in is-hidden nav-user-slot">
+        <a href="client-portal.html" class="nav-auth-btn js-portal-link">My Account</a>
+        <button type="button" class="nav-signout-btn js-signout">Sign Out</button>
       </li>
     </ul>
     <div class="hamburger" id="hamburger" aria-label="Open menu" role="button" tabindex="0">
@@ -51,7 +55,13 @@
       <a href="#requirements" class="mm-link">Requirements</a>
       <a href="#why" class="mm-link">Why Us</a>
       <a href="#contact" class="mm-link">Get Started</a>
-      <!-- mmAuthBtn is injected by script.js -->
+      <div class="auth-slot-signed-out">
+        <button type="button" id="mmAuthBtn" class="mm-auth-btn">Sign In / Create Account</button>
+      </div>
+      <div class="auth-slot-signed-in is-hidden mm-user-slot">
+        <a href="client-portal.html" class="mm-auth-btn js-portal-link">My Account</a>
+        <button type="button" class="mm-auth-btn mm-signout-btn js-signout">Sign Out</button>
+      </div>
     </div>
   </div>
 
@@ -454,10 +464,11 @@
   <!-- EmailJS SDK (for contact form) -->
   <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 
-  <!--
-    Supabase SDK — uncomment when you're ready to wire up authentication.
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  -->
+  <!-- Supabase SDK (auth) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
+  <!-- Supabase project config (URL + public anon key) -->
+  <script src="config.js"></script>
 
   <!-- App logic -->
   <script src="script.js"></script>
