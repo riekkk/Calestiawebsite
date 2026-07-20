@@ -77,9 +77,22 @@ $$ language sql stable security definer set search_path = public;
 -- suspended/disabled, has role = 'employee' but NO staff privileges at
 -- all until an admin flips them back to active. This is enforced here,
 -- not just hidden in the UI.
+-- request.jwt.claims is set by PostgREST on every API request (even
+-- anonymous ones get '{}'). It is only ever unset on a direct database
+-- connection — the SQL editor, a migration tool, psql. Such a connection
+-- already has unrestricted access to the database (it could drop this
+-- trigger entirely), so treating it as trusted here doesn't grant it
+-- anything it doesn't already have — it just stops these app-level
+-- guards from misfiring on legitimate admin SQL (e.g. bootstrapping the
+-- first administrator, which has no other way to happen).
+create or replace function public.is_direct_sql_connection()
+returns boolean as $$
+  select current_setting('request.jwt.claims', true) is null;
+$$ language sql stable;
+
 create or replace function public.is_staff()
 returns boolean as $$
-  select exists (
+  select public.is_direct_sql_connection() or exists (
     select 1 from public.profiles
     where id = auth.uid() and role in ('employee', 'admin') and status = 'active'
   );
@@ -87,7 +100,7 @@ $$ language sql stable security definer set search_path = public;
 
 create or replace function public.is_admin()
 returns boolean as $$
-  select exists (
+  select public.is_direct_sql_connection() or exists (
     select 1 from public.profiles
     where id = auth.uid() and role = 'admin' and status = 'active'
   );
