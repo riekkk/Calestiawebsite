@@ -38,6 +38,9 @@
     initAuthModal();
     initAuthState();
     initResetPassword();
+    initTestimonials();
+    initReviewForm();
+    initTourFilters();
   }
 
   /* ==================================================================
@@ -236,7 +239,7 @@
       });
     }, { threshold: 0.1 });
 
-    var targets = document.querySelectorAll('.timeline-step, .why-row, .service-mini, .req-item');
+    var targets = document.querySelectorAll('.timeline-step, .testimonial-card, .service-mini, .req-item, .tour-card, .form-doc-card');
     for (var i = 0; i < targets.length; i++) {
       targets[i].style.opacity = '0';
       targets[i].style.transition = 'opacity 0.6s ease';
@@ -268,6 +271,12 @@
 
     // Listen for the custom "open auth" event (kept for backward compat with old TSX)
     window.addEventListener('calestia:auth-open', openAuthModal);
+
+    // Any other "sign in to continue" trigger on the page (e.g. Leave a Review)
+    var openAuthBtns = document.querySelectorAll('.js-open-auth');
+    for (var o = 0; o < openAuthBtns.length; o++) {
+      openAuthBtns[o].addEventListener('click', openAuthModal);
+    }
 
     // Close handlers (backdrop + close button + [data-close-auth])
     var closers = modal.querySelectorAll('[data-close-auth]');
@@ -518,7 +527,10 @@
     });
   }
 
+  var currentSession = null;
+
   function updateAuthUI(session) {
+    currentSession = session || null;
     var signedIn = !!(session && session.user);
 
     var slotsOut = document.querySelectorAll('.auth-slot-signed-out');
@@ -540,6 +552,9 @@
 
     var emailEls = document.querySelectorAll('.js-portal-email');
     for (var n = 0; n < emailEls.length; n++) emailEls[n].textContent = session.user.email;
+
+    var reviewName = document.getElementById('reviewName');
+    if (reviewName) reviewName.value = fullName;
   }
 
   function handleSignOut() {
@@ -613,6 +628,243 @@
           showToast('Something went wrong. Please try again.', true);
         });
     });
+  }
+
+  /* ==================================================================
+     11. Testimonials / Reviews (homepage)
+     ================================================================== */
+  var SERVICE_BADGES = {
+    'Japan Visa Assistance': 'Visa',
+    'Flight Booking': 'Flights',
+    'Hotel & Accommodation': 'Hotel',
+    'Domestic Tour': 'Tours',
+    'International Tour': 'Tours',
+    'Travel Insurance': 'Insurance',
+    'Airport Transfers': 'Transfers'
+  };
+
+  function starString(rating) {
+    var full = Math.round(rating);
+    return '★★★★★☆☆☆☆☆'.slice(5 - full, 10 - full);
+  }
+
+  function initTestimonials() {
+    var grid = document.getElementById('testimonialGrid');
+    if (!grid || !supabaseClient) return;
+
+    supabaseClient
+      .from('reviews')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .then(function (result) {
+        if (result.error) return; // table not provisioned yet — leave empty state
+        renderTestimonials(result.data || []);
+      })
+      .catch(function () { /* leave empty state */ });
+  }
+
+  function renderTestimonials(reviews) {
+    var grid = document.getElementById('testimonialGrid');
+    var empty = document.getElementById('testimonialEmpty');
+    if (!grid) return;
+
+    if (!reviews.length) return; // keep default empty state
+
+    if (empty) empty.remove();
+    grid.innerHTML = '';
+
+    reviews.forEach(function (r) {
+      var card = document.createElement('div');
+      card.className = 'testimonial-card';
+
+      var initials = (r.name || '?').trim().split(/\s+/).map(function (w) { return w[0]; }).slice(0, 2).join('').toUpperCase();
+      var badge = SERVICE_BADGES[r.service] || r.service || '';
+      var dateStr = r.created_at ? new Date(r.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
+
+      card.innerHTML =
+        '<div class="tc-stars" aria-hidden="true">' + starString(r.rating || 0) + '</div>' +
+        '<p class="tc-text"></p>' +
+        '<div class="tc-divider"></div>' +
+        '<div class="tc-author">' +
+          (r.photo_url
+            ? '<img class="tc-avatar" src="' + r.photo_url + '" alt="" />'
+            : '<div class="tc-avatar">' + initials + '</div>') +
+          '<div>' +
+            '<div class="tc-author-name"></div>' +
+            '<div class="tc-author-meta">' +
+              (badge ? '<span class="tc-badge">' + badge + '</span>' : '') +
+              '<span class="tc-date">' + dateStr + '</span>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+
+      card.querySelector('.tc-text').textContent = r.review_text || '';
+      card.querySelector('.tc-author-name').textContent = r.name || 'Calestia Client';
+      grid.appendChild(card);
+    });
+
+    // Rating summary
+    var count = reviews.length;
+    var avg = reviews.reduce(function (s, r) { return s + (r.rating || 0); }, 0) / count;
+    var scoreNum = document.getElementById('rsScoreNum');
+    var rsStars = document.getElementById('rsStars');
+    var rsCount = document.getElementById('rsCount');
+    var rsBars = document.getElementById('rsBars');
+    var heroRating = document.getElementById('heroRatingValue');
+
+    if (scoreNum) scoreNum.textContent = avg.toFixed(1);
+    if (rsStars) rsStars.textContent = starString(avg);
+    if (rsCount) rsCount.textContent = count + (count === 1 ? ' review' : ' reviews');
+    if (heroRating) heroRating.textContent = avg.toFixed(1) + '★';
+
+    if (rsBars) {
+      rsBars.innerHTML = '';
+      for (var star = 5; star >= 1; star--) {
+        var starCount = reviews.filter(function (r) { return Math.round(r.rating) === star; }).length;
+        var pct = count ? (starCount / count) * 100 : 0;
+        var row = document.createElement('div');
+        row.className = 'rs-bar-row';
+        row.innerHTML =
+          '<span class="rs-bar-label">' + star + '★</span>' +
+          '<span class="rs-bar-track"><span class="rs-bar-fill" style="width:' + pct + '%"></span></span>' +
+          '<span class="rs-bar-count">' + starCount + '</span>';
+        rsBars.appendChild(row);
+      }
+    }
+  }
+
+  /* ==================================================================
+     12. Leave a Review (homepage)
+     ================================================================== */
+  function initReviewForm() {
+    var form = document.getElementById('reviewForm');
+    if (!form) return;
+
+    var picker = document.getElementById('starPicker');
+    var selectedRating = 0;
+
+    if (picker) {
+      var starBtns = picker.querySelectorAll('.star-btn');
+      var paintStars = function (n) {
+        for (var i = 0; i < starBtns.length; i++) {
+          starBtns[i].classList.toggle('is-active', i < n);
+        }
+      };
+      for (var i = 0; i < starBtns.length; i++) {
+        starBtns[i].addEventListener('click', function () {
+          selectedRating = parseInt(this.getAttribute('data-star'), 10);
+          paintStars(selectedRating);
+        });
+      }
+    }
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+
+      if (!currentSession || !currentSession.user) {
+        showToast('Please sign in to leave a review.', true);
+        return;
+      }
+      if (!supabaseClient) {
+        showToast('Reviews are not connected yet. Check config.js.', true);
+        return;
+      }
+
+      var service = getValue('reviewService');
+      var text = getValue('reviewText');
+      var photoInput = document.getElementById('reviewPhoto');
+      var photoFile = photoInput && photoInput.files && photoInput.files[0];
+
+      if (!service) { showToast('Please select the service you availed.', true); return; }
+      if (!selectedRating) { showToast('Please select a star rating.', true); return; }
+      if (!text || text.length < 10) { showToast('Please write a bit more about your experience.', true); return; }
+
+      var btn = document.getElementById('reviewSubmitBtn');
+      var originalHTML = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span>Submitting...</span>';
+
+      var meta = currentSession.user.user_metadata || {};
+      var fullName = meta.full_name || [meta.first_name, meta.last_name].filter(Boolean).join(' ') || currentSession.user.email;
+
+      var insertReview = function (photoUrl) {
+        supabaseClient.from('reviews').insert({
+          user_id: currentSession.user.id,
+          name: fullName,
+          service: service,
+          rating: selectedRating,
+          review_text: text,
+          photo_url: photoUrl || null
+        }).then(function (result) {
+          btn.disabled = false;
+          btn.innerHTML = originalHTML;
+          if (result.error) {
+            showToast(result.error.message || 'Could not submit review.', true);
+            return;
+          }
+          showToast('Thank you for your review!');
+          form.reset();
+          selectedRating = 0;
+          if (picker) paintStars(0);
+          var reviewName = document.getElementById('reviewName');
+          if (reviewName) reviewName.value = fullName;
+          initTestimonials();
+        }).catch(function () {
+          btn.disabled = false;
+          btn.innerHTML = originalHTML;
+          showToast('Something went wrong. Please try again.', true);
+        });
+      };
+
+      if (photoFile) {
+        var path = currentSession.user.id + '/' + Date.now() + '-' + photoFile.name;
+        supabaseClient.storage.from('review-photos').upload(path, photoFile)
+          .then(function (uploadResult) {
+            if (uploadResult.error) { insertReview(null); return; }
+            var pub = supabaseClient.storage.from('review-photos').getPublicUrl(path);
+            insertReview(pub.data ? pub.data.publicUrl : null);
+          })
+          .catch(function () { insertReview(null); });
+      } else {
+        insertReview(null);
+      }
+    });
+  }
+
+  /* ==================================================================
+     13. Tour package search & filters (tour-packages-domestic/international)
+     ================================================================== */
+  function initTourFilters() {
+    var searchInput = document.getElementById('tourSearch');
+    var categorySelect = document.getElementById('tourCategory');
+    var cards = document.querySelectorAll('.tour-card');
+    if (!cards.length || (!searchInput && !categorySelect)) return;
+
+    function applyFilters() {
+      var query = searchInput ? searchInput.value.trim().toLowerCase() : '';
+      var category = categorySelect ? categorySelect.value : '';
+
+      for (var i = 0; i < cards.length; i++) {
+        var card = cards[i];
+        var name = (card.getAttribute('data-name') || '').toLowerCase();
+        var location = (card.getAttribute('data-location') || '').toLowerCase();
+        var cardCategory = card.getAttribute('data-category') || '';
+
+        var matchesQuery = !query || name.indexOf(query) !== -1 || location.indexOf(query) !== -1;
+        var matchesCategory = !category || cardCategory === category;
+
+        card.classList.toggle('is-filtered-out', !(matchesQuery && matchesCategory));
+      }
+
+      var grid = document.getElementById('tourGrid');
+      var visibleCount = document.querySelectorAll('.tour-card:not(.is-filtered-out)').length;
+      var noResults = document.getElementById('tourNoResults');
+      if (noResults) noResults.classList.toggle('is-hidden', visibleCount > 0);
+      if (grid) grid.classList.toggle('is-hidden', visibleCount === 0);
+    }
+
+    if (searchInput) searchInput.addEventListener('input', applyFilters);
+    if (categorySelect) categorySelect.addEventListener('change', applyFilters);
   }
 
 })();

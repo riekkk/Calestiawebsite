@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>International Tours — Calestia Travel &amp; Tours</title>
+  <meta name="description" content="Travel beyond borders with Calestia's international tour packages." />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" type="image/png" href="assets/images/calestia-logo.png" />
+</head>
+<body>
+
+  <nav id="navbar">
+    <a href="index.html" class="nav-logo">
+      <img src="assets/images/calestia-logo.png" alt="Calestia logo" class="logo-icon" />
+      <span>Calestia Travel &amp; Tours</span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="tour-packages.html">All Packages</a></li>
+      <li><a href="tour-packages-domestic.html">Domestic</a></li>
+      <li><a href="index.html#testimonials">Reviews</a></li>
+      <li><a href="index.html#contact" class="nav-cta">Get Started</a></li>
+    </ul>
+  </nav>
+
+  <section class="tour-hero is-dark">
+    <div class="tour-hero-bg">
+      <img src="https://images.unsplash.com/photo-1592487501226-7ed5e5dc80f2?w=1200&h=600&fit=crop&auto=format" alt="International destinations" loading="lazy" />
+    </div>
+    <div class="tour-hero-content">
+      <span class="section-tag">✦ International Tours</span>
+      <h1>Travel Beyond <em>Borders</em></h1>
+      <p>Thoughtfully crafted itineraries to the world's most captivating destinations.</p>
+    </div>
+  </section>
+
+  <main class="tour-listing">
+    <div class="tour-search-bar">
+      <input type="text" id="tourSearch" placeholder="Search destination or location..." aria-label="Search destinations" />
+      <select id="tourCategory" aria-label="Filter by category">
+        <option value="">All Categories</option>
+        <option value="east-asia">East Asia</option>
+        <option value="southeast-asia">Southeast Asia</option>
+      </select>
+    </div>
+
+    <div class="tour-grid" id="tourGrid">
+      <div class="tour-card" data-name="Japan" data-location="Tokyo Osaka Kyoto" data-category="east-asia">
+        <div class="tour-card-img">
+          <img src="https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=600&h=400&fit=crop&auto=format" alt="Japan" loading="lazy" />
+          <span class="tour-card-badge">Soon</span>
+        </div>
+        <div class="tour-card-body">
+          <h3>Japan</h3>
+          <div class="tour-card-loc">📍 Tokyo, Osaka, Kyoto</div>
+          <p class="tour-card-desc">Cherry blossoms, temples, and neon-lit cityscapes await.</p>
+          <div class="tour-card-footer">
+            <div class="tour-card-price">From<strong>Pricing soon</strong></div>
+            <a href="booking.html?package=japan" class="tour-card-book">Book Now</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-card" data-name="South Korea" data-location="Seoul Busan Jeju" data-category="east-asia">
+        <div class="tour-card-img">
+          <img src="https://images.unsplash.com/photo-1517154421773-0529f29ea451?w=600&h=400&fit=crop&auto=format" alt="South Korea" loading="lazy" />
+          <span class="tour-card-badge">Soon</span>
+        </div>
+        <div class="tour-card-body">
+          <h3>South Korea</h3>
+          <div class="tour-card-loc">📍 Seoul, Busan, Jeju</div>
+          <p class="tour-card-desc">K-culture, scenic coastlines, and vibrant street food.</p>
+          <div class="tour-card-footer">
+            <div class="tour-card-price">From<strong>Pricing soon</strong></div>
+            <a href="booking.html?package=south-korea" class="tour-card-book">Book Now</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-card" data-name="Thailand" data-location="Bangkok Phuket Chiang Mai" data-category="southeast-asia">
+        <div class="tour-card-img">
+          <img src="https://images.unsplash.com/photo-1552465011-b4e21bf6e79a?w=600&h=400&fit=crop&auto=format" alt="Thailand" loading="lazy" />
+          <span class="tour-card-badge">Soon</span>
+        </div>
+        <div class="tour-card-body">
+          <h3>Thailand</h3>
+          <div class="tour-card-loc">📍 Bangkok, Phuket, Chiang Mai</div>
+          <p class="tour-card-desc">Gilded temples, tropical beaches, and amazing cuisine.</p>
+          <div class="tour-card-footer">
+            <div class="tour-card-price">From<strong>Pricing soon</strong></div>
+            <a href="booking.html?package=thailand" class="tour-card-book">Book Now</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-card" data-name="Singapore" data-location="Singapore City" data-category="southeast-asia">
+        <div class="tour-card-img">
+          <img src="https://images.unsplash.com/photo-1565967511849-76a60a516170?w=600&h=400&fit=crop&auto=format" alt="Singapore" loading="lazy" />
+          <span class="tour-card-badge">Soon</span>
+        </div>
+        <div class="tour-card-body">
+          <h3>Singapore</h3>
+          <div class="tour-card-loc">📍 Singapore City</div>
+          <p class="tour-card-desc">Iconic skyline, Gardens by the Bay, and world-class dining.</p>
+          <div class="tour-card-footer">
+            <div class="tour-card-price">From<strong>Pricing soon</strong></div>
+            <a href="booking.html?package=singapore" class="tour-card-book">Book Now</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="tour-no-results is-hidden" id="tourNoResults">No destinations match your search. Try a different keyword or category.</p>
+
+    <div class="tour-more-banner">
+      <div class="tour-more-banner-text">
+        <h4>More destinations coming soon!</h4>
+        <p>We're crafting more international experiences for you.</p>
+      </div>
+      <a href="index.html#contact" class="btn-primary">Contact Us</a>
+    </div>
+  </main>
+
+  <footer>
+    <div class="footer-bottom">
+      <p>© 2026 Calestia Travel &amp; Tours. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script src="script.js"></script>
+</body>
+</html>

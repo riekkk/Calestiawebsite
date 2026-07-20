@@ -29,7 +29,7 @@
       <li><a href="#services">Services</a></li>
       <li><a href="#process">How It Works</a></li>
       <li><a href="#requirements">Requirements</a></li>
-      <li><a href="#why">Why Us</a></li>
+      <li><a href="#testimonials">Reviews</a></li>
       <li><a href="#contact" class="nav-cta">Get Started</a></li>
       <li class="auth-slot-signed-out">
         <button type="button" id="authTriggerBtn" class="nav-auth-btn">
@@ -53,7 +53,7 @@
       <a href="#services" class="mm-link">Services</a>
       <a href="#process" class="mm-link">How It Works</a>
       <a href="#requirements" class="mm-link">Requirements</a>
-      <a href="#why" class="mm-link">Why Us</a>
+      <a href="#testimonials" class="mm-link">Reviews</a>
       <a href="#contact" class="mm-link">Get Started</a>
       <div class="auth-slot-signed-out">
         <button type="button" id="mmAuthBtn" class="mm-auth-btn">Sign In / Create Account</button>
@@ -87,7 +87,7 @@
       <div class="hero-stats">
         <div><strong>500+</strong><span>Visas Processed</span></div>
         <div><strong>98%</strong><span>Approval Rate</span></div>
-        <div><strong>5★</strong><span>Client Rating</span></div>
+        <a href="#testimonials" class="hero-stat-link"><strong id="heroRatingValue">5★</strong><span>Client Rating</span></a>
       </div>
     </div>
     <div class="hero-visual">
@@ -216,62 +216,77 @@
     </div>
   </section>
 
-  <!-- ==================== WHY US ==================== -->
-  <section class="why" id="why">
+  <!-- ==================== TESTIMONIALS / REVIEWS ==================== -->
+  <section class="testimonials" id="testimonials">
     <div class="center">
-      <span class="section-tag">✦ Why Choose Us</span>
-      <h2 class="section-title">Trusted by Travelers</h2>
-      <p class="section-sub">We're not just a visa service — we're your travel companion from paperwork to passport stamp.</p>
+      <span class="section-tag">✦ Client Reviews</span>
+      <h2 class="section-title">What Our Travelers Say</h2>
+      <p class="section-sub">Read authentic experiences from our clients and share your own after using our services.</p>
     </div>
-    <div class="why-rows">
-      <div class="why-row">
-        <div class="why-icon">
-          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#335686" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="display:block;">
-            <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill="#335686" stroke="none"/>
-          </svg>
-        </div>
-        <div><h4>Specialized in Japan</h4><p>We know Japan visa requirements inside out — no guesswork, no delays, no surprises.</p></div>
+
+    <div class="rating-summary" id="ratingSummary">
+      <div class="rs-score">
+        <div class="rs-score-num" id="rsScoreNum">—</div>
+        <div class="rs-stars" id="rsStars" aria-hidden="true"></div>
+        <div class="rs-count" id="rsCount">No reviews yet</div>
       </div>
-      <div class="why-row">
-        <div class="why-icon">
-          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#335686" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="display:block;">
-            <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" fill="#335686" stroke="none"/>
-          </svg>
-        </div>
-        <div><h4>Fast Turnaround</h4><p>We process applications efficiently, keeping you informed at every stage of the journey.</p></div>
+      <div class="rs-divider" aria-hidden="true"></div>
+      <div class="rs-bars" id="rsBars"></div>
+    </div>
+
+    <div class="testimonial-grid" id="testimonialGrid">
+      <p class="testimonial-empty" id="testimonialEmpty">No reviews yet — be the first to share your experience!</p>
+    </div>
+
+    <!-- ==================== LEAVE A REVIEW ==================== -->
+    <div class="review-form-wrap">
+      <h3 class="review-form-title">Leave a Review</h3>
+
+      <div class="review-form-card auth-slot-signed-out">
+        <p>Please sign in to leave a review.</p>
+        <button type="button" class="btn-primary js-open-auth">Sign In / Create Account</button>
       </div>
-      <div class="why-row">
-        <div class="why-icon">
-          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#335686" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="display:block;">
-            <path d="M20 12a8 8 0 0 1-8 8 8 8 0 0 1-3.5-.8L4 21l1.5-4.2A8 8 0 1 1 20 12Z"/>
-          </svg>
+
+      <form class="review-form-card auth-slot-signed-in is-hidden" id="reviewForm" novalidate>
+        <div class="form-group">
+          <label for="reviewName">Name</label>
+          <input type="text" id="reviewName" placeholder="Your name" readonly />
         </div>
-        <div><h4>Dedicated Support</h4><p>Personal assistance via chat, email, or call — a real human answers your questions.</p></div>
-      </div>
-      <div class="why-row">
-        <div class="why-icon">
-          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#335686" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="display:block;">
-            <rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>
-          </svg>
+        <div class="form-group">
+          <label for="reviewService">Service Availed</label>
+          <select id="reviewService" required>
+            <option value="">Select a service...</option>
+            <option>Japan Visa Assistance</option>
+            <option>Flight Booking</option>
+            <option>Hotel &amp; Accommodation</option>
+            <option>Domestic Tour</option>
+            <option>International Tour</option>
+            <option>Travel Insurance</option>
+            <option>Airport Transfers</option>
+          </select>
         </div>
-        <div><h4>Secure &amp; Confidential</h4><p>Your documents and personal information are handled with the highest level of security.</p></div>
-      </div>
-      <div class="why-row">
-        <div class="why-icon">
-          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#335686" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="display:block;">
-            <circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>
-          </svg>
+        <div class="form-group">
+          <label>Your Rating</label>
+          <div class="star-picker" id="starPicker" role="radiogroup" aria-label="Star rating">
+            <button type="button" class="star-btn" data-star="1" aria-label="1 star">★</button>
+            <button type="button" class="star-btn" data-star="2" aria-label="2 stars">★</button>
+            <button type="button" class="star-btn" data-star="3" aria-label="3 stars">★</button>
+            <button type="button" class="star-btn" data-star="4" aria-label="4 stars">★</button>
+            <button type="button" class="star-btn" data-star="5" aria-label="5 stars">★</button>
+          </div>
         </div>
-        <div><h4>High Approval Rate</h4><p>Our meticulous document review process keeps our client approval rate consistently high.</p></div>
-      </div>
-      <div class="why-row">
-        <div class="why-icon">
-          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#335686" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="display:block;">
-            <rect x="2.5" y="6" width="19" height="12" rx="2"/><circle cx="12" cy="12" r="3"/><path d="M6 9v0M18 15v0"/>
-          </svg>
+        <div class="form-group">
+          <label for="reviewText">Your Review</label>
+          <textarea id="reviewText" placeholder="Tell others about your experience with Calestia..." required></textarea>
         </div>
-        <div><h4>Transparent Pricing</h4><p>No hidden fees. Clear service rates discussed upfront before we begin your application.</p></div>
-      </div>
+        <div class="form-group">
+          <label for="reviewPhoto">Photo <span class="optional-tag">(optional)</span></label>
+          <input type="file" id="reviewPhoto" accept="image/*" />
+        </div>
+        <button type="submit" class="form-submit" id="reviewSubmitBtn">
+          <span>Submit Review</span>
+        </button>
+      </form>
     </div>
   </section>
 
@@ -375,7 +390,7 @@
       <div class="footer-col">
         <h5>Company</h5>
         <ul>
-          <li><a href="#why">Why Choose Us</a></li>
+          <li><a href="#testimonials">Reviews</a></li>
           <li><a href="#process">How It Works</a></li>
           <li><a href="#requirements">Requirements</a></li>
         </ul>
