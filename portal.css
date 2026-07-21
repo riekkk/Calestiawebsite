@@ -315,6 +315,37 @@ html.ps-html, body.ps-body {
 .ps-btn-sm { padding: 7px 13px; font-size: 0.78rem; }
 .ps-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+/* Kebab (⋯) action menu — used by visa application cards and the
+   documents table's row actions. */
+.ps-kebab { position: relative; flex-shrink: 0; }
+.ps-kebab-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 10px;
+  background: var(--white); border: 1.5px solid #dbe9f7; color: var(--navy-dk);
+  cursor: pointer; transition: background 0.15s;
+}
+.ps-kebab-btn:hover { background: var(--sky-lt); }
+.ps-kebab-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 20;
+  background: var(--white); border: 1px solid var(--ps-border); border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(31, 58, 95, 0.18);
+  min-width: 190px; padding: 6px;
+  opacity: 0; pointer-events: none; transform: translateY(-4px);
+  transition: opacity 0.12s, transform 0.12s;
+}
+.ps-kebab-menu.is-open { opacity: 1; pointer-events: auto; transform: translateY(0); }
+.ps-kebab-menu button {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 9px 10px; border-radius: 8px; border: none; background: none;
+  font-family: inherit; font-size: 0.82rem; font-weight: 600; color: var(--navy-dk);
+  cursor: pointer; text-align: left;
+}
+.ps-kebab-menu button:hover { background: var(--ps-bg); }
+.ps-kebab-menu button.is-danger { color: #b91c1c; }
+.ps-kebab-menu button.is-danger:hover { background: #fef2f2; }
+.ps-kebab-menu button:disabled { opacity: 0.45; cursor: not-allowed; }
+.ps-kebab-menu button:disabled:hover { background: none; }
+
 
 /* ==========================================================================
    6. Tables
@@ -373,6 +404,48 @@ html.ps-html, body.ps-body {
 .ps-modal-section { margin-bottom: 22px; }
 .ps-modal-section:last-child { margin-bottom: 0; }
 .ps-modal-section h3 { font-size: 0.88rem; font-weight: 700; color: var(--navy-dk); margin-bottom: 10px; }
+
+/* "Add Documents" dialog — collapsible per-category sections + queued
+   file chips (My Documents redesign). */
+.ps-doc-cat { border: 1.5px solid var(--ps-border); border-radius: 14px; margin-bottom: 12px; overflow: hidden; }
+.ps-doc-cat:last-child { margin-bottom: 0; }
+.ps-doc-cat > summary {
+  list-style: none; cursor: pointer; padding: 14px 16px;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  font-weight: 700; color: var(--navy-dk); font-size: 0.9rem;
+  background: var(--ps-bg);
+}
+.ps-doc-cat > summary::-webkit-details-marker { display: none; }
+.ps-doc-cat > summary .ps-doc-cat-chevron { transition: transform 0.15s; flex-shrink: 0; color: var(--ps-text-dim); }
+.ps-doc-cat[open] > summary .ps-doc-cat-chevron { transform: rotate(180deg); }
+.ps-doc-cat-body { padding: 14px 16px 16px; }
+.ps-doc-cat-body > p { font-size: 0.8rem; color: var(--ps-text-dim); margin-bottom: 12px; }
+.ps-doc-queue { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.ps-doc-chip {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 9px 12px; border-radius: 10px; background: var(--ps-bg); border: 1px solid var(--ps-border);
+  font-size: 0.8rem;
+}
+.ps-doc-chip.is-error { background: #fef2f2; border-color: #fee2e2; }
+.ps-doc-chip-name { font-weight: 600; color: var(--navy-dk); flex: 1; min-width: 120px; overflow-wrap: anywhere; }
+.ps-doc-chip-size { color: var(--ps-text-dim); flex-shrink: 0; }
+.ps-doc-chip select {
+  padding: 6px 8px; border-radius: 8px; border: 1.5px solid var(--ps-border);
+  font-family: inherit; font-size: 0.78rem; color: var(--navy-dk); background: var(--white);
+}
+.ps-doc-chip-error { flex-basis: 100%; color: #b91c1c; font-size: 0.75rem; }
+.ps-doc-chip-remove {
+  background: none; border: none; cursor: pointer; color: var(--ps-text-dim);
+  width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.ps-doc-chip-remove:hover { background: #fee2e2; color: #b91c1c; }
+.ps-doc-chip-status { font-size: 0.75rem; font-weight: 600; flex-shrink: 0; }
+.ps-doc-chip-status.is-uploading { color: var(--navy); }
+.ps-doc-chip-status.is-done { color: #047857; }
+.ps-add-docs-footer {
+  display: flex; justify-content: flex-end; gap: 10px;
+  padding: 16px 24px; border-top: 1px solid var(--ps-border);
+}
 
 
 /* ==========================================================================
@@ -791,11 +864,11 @@ html.ps-html, body.ps-body {
 .ps-app-card-title-row h3 { font-size: 1rem; font-weight: 700; color: var(--navy-dk); }
 .ps-app-card-meta { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--ps-text-dim); }
 .ps-app-card-meta-dot { width: 4px; height: 4px; border-radius: 50%; background: #d1d5db; flex-shrink: 0; }
-.ps-app-card-action { flex-shrink: 0; }
+.ps-app-card-action { flex-shrink: 0; display: flex; align-items: center; gap: 8px; }
 @media (max-width: 639.98px) {
   .ps-app-card { padding: 16px; }
   .ps-app-card-action { width: 100%; }
-  .ps-app-card-action .ps-btn { width: 100%; justify-content: center; }
+  .ps-app-card-action .ps-btn { flex: 1; justify-content: center; }
 }
 
 .ps-empty-invite {

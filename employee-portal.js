@@ -175,16 +175,14 @@
      Clients
      ------------------------------------------------------------------ */
   function loadClients() {
-    supabaseClient.from('profiles')
-      .select('*, applications(status, updated_at), documents(document_type, status, file_path)')
-      .eq('role', 'client')
+    PS.fetchClients()
       .then(function (result) {
         clientsCache = result.data || [];
         document.getElementById('psClientsCount').textContent = clientsCache.length + ' total clients';
         renderClientsTable();
       })
       .catch(function () {
-        document.getElementById('clientsTableBody').innerHTML = '<tr><td colspan="5" class="ps-table-hint">Could not load clients.</td></tr>';
+        document.getElementById('clientsTableBody').innerHTML = '<tr><td colspan="6" class="ps-table-hint">Could not load clients.</td></tr>';
       });
 
     var search = document.getElementById('clientSearch');
@@ -194,35 +192,7 @@
   }
 
   function renderClientsTable() {
-    var tbody = document.getElementById('clientsTableBody');
-    var query = (document.getElementById('clientSearch').value || '').trim().toLowerCase();
-    var statusFilter = document.getElementById('clientStatusFilter').value || '';
-
-    var rows = clientsCache.filter(function (c) {
-      var app = (c.applications && c.applications[0]) || null;
-      var matchesQuery = !query || (c.full_name || '').toLowerCase().indexOf(query) !== -1 || (c.email || '').toLowerCase().indexOf(query) !== -1;
-      var matchesStatus = !statusFilter || (app && app.status === statusFilter);
-      return matchesQuery && matchesStatus;
-    });
-
-    if (!rows.length) { tbody.innerHTML = '<tr><td colspan="5" class="ps-table-hint">No clients match.</td></tr>'; return; }
-
-    tbody.innerHTML = rows.map(function (c) {
-      var app = (c.applications && c.applications[0]) || null;
-      var docs = c.documents || [];
-      var totalTypes = (window.CALESTIA_DOCUMENT_TYPES || []).length;
-      return '<tr>' +
-        '<td style="display:flex;align-items:center;gap:9px;"><div class="ps-avatar ps-avatar-sm">' + PS.escapeHTML((c.full_name || '?').charAt(0)) + '</div><strong>' + PS.escapeHTML(c.full_name || 'Unnamed') + '</strong></td>' +
-        '<td>' + PS.escapeHTML(c.email) + '</td>' +
-        '<td>' + (app ? '<span class="ps-badge ps-badge-' + (PS.APP_STATUS_BADGE[app.status] || 'gray') + '">' + PS.escapeHTML(PS.labelFor(window.CALESTIA_APPLICATION_STATUSES, app.status)) + '</span>' : '—') + '</td>' +
-        '<td>' + docs.filter(function (d) { return d.file_path; }).length + '/' + totalTypes + ' uploaded</td>' +
-        '<td><button type="button" class="ps-btn ps-btn-outline ps-btn-sm js-open-client" data-client-id="' + c.id + '">View</button></td>' +
-      '</tr>';
-    }).join('');
-
-    tbody.querySelectorAll('.js-open-client').forEach(function (btn) {
-      btn.addEventListener('click', function () { PS.openClientDetail(btn.getAttribute('data-client-id')); });
-    });
+    PS.renderClientsTable(clientsCache, { tbodyId: 'clientsTableBody', searchElId: 'clientSearch', filterElId: 'clientStatusFilter' });
   }
 
   /* ------------------------------------------------------------------
@@ -272,7 +242,7 @@
     if (!rows.length) { container.innerHTML = '<p class="ps-hint">Nothing pending review right now.</p>'; return; }
 
     container.innerHTML = rows.map(function (d) {
-      return '<div class="ps-card ps-card-pad" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;" data-client-id="' + d.client_id + '" data-doc-type="' + d.document_type + '">' +
+      return '<div class="ps-card ps-card-pad" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;" data-client-id="' + d.client_id + '" data-doc-id="' + d.id + '">' +
         '<div class="ps-avatar ps-avatar-sm">' + PS.escapeHTML((PS.profileName(d.client_id) || '?').charAt(0)) + '</div>' +
         '<div style="flex:1;min-width:180px;"><p style="font-weight:600;color:var(--navy-dk);font-size:0.86rem;">' + PS.escapeHTML(PS.labelFor(window.CALESTIA_DOCUMENT_TYPES, d.document_type)) + '</p>' +
         '<p class="ps-hint">' + PS.escapeHTML(PS.profileName(d.client_id)) + ' · Uploaded ' + PS.timeAgo(d.uploaded_at) + '</p></div>' +
@@ -286,7 +256,7 @@
     container.querySelectorAll('[data-q-action]').forEach(function (btn) {
       var row = btn.closest('[data-client-id]');
       btn.addEventListener('click', function () {
-        PS.handleDocAction(row.getAttribute('data-client-id'), row.getAttribute('data-doc-type'), btn.getAttribute('data-q-action'));
+        PS.handleDocAction(row.getAttribute('data-client-id'), row.getAttribute('data-doc-id'), btn.getAttribute('data-q-action'));
       });
     });
   }

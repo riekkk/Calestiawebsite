@@ -139,6 +139,68 @@ window.PSStaff = (function () {
   }
 
   /* ------------------------------------------------------------------
+     Clients list (Admin + Employee) — a profile becomes a "client" once
+     they've submitted at least one visa_applicants row. Tours don't count
+     (Tour Packages redirects externally). Shared here since the query and
+     table render were byte-identical between the two portals.
+     ------------------------------------------------------------------ */
+  var CLIENT_TERMINAL_APP_STATUSES = ['visa_approved', 'visa_denied', 'completed'];
+  var CLIENT_ACTIVE_WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
+
+  function fetchClients() {
+    // visa_applicants!inner makes this an inner-join filter: only profiles
+    // with at least one visa_applicants row come back (still nested as an
+    // array per profile, not a flat cross join).
+    return supabaseClient.from('profiles')
+      .select('*, visa_applicants!inner(created_at), documents(document_type, status, file_path), applications(status, updated_at)')
+      .eq('role', 'client');
+  }
+
+  function renderClientsTable(clientsCache, opts) {
+    var tbody = document.getElementById(opts.tbodyId);
+    var search = document.getElementById(opts.searchElId);
+    var filter = document.getElementById(opts.filterElId);
+    var query = (search.value || '').trim().toLowerCase();
+    var statusFilter = filter.value || '';
+
+    var rows = (clientsCache || []).filter(function (c) {
+      var app = (c.applications && c.applications[0]) || null;
+      var matchesQuery = !query || (c.full_name || '').toLowerCase().indexOf(query) !== -1 || (c.email || '').toLowerCase().indexOf(query) !== -1;
+      var matchesStatus = !statusFilter || (app && app.status === statusFilter);
+      return matchesQuery && matchesStatus;
+    });
+
+    if (!rows.length) { tbody.innerHTML = '<tr><td colspan="6" class="ps-table-hint">No clients match.</td></tr>'; return; }
+
+    tbody.innerHTML = rows.map(function (c) {
+      var app = (c.applications && c.applications[0]) || null;
+      var docs = c.documents || [];
+      var appliedAtValues = (c.visa_applicants || [])
+        .map(function (v) { return new Date(v.created_at).getTime(); })
+        .filter(function (t) { return !isNaN(t); });
+      var firstAppliedAt = appliedAtValues.length ? Math.min.apply(null, appliedAtValues) : null;
+      var lastAppliedAt = appliedAtValues.length ? Math.max.apply(null, appliedAtValues) : null;
+      var inProgress = !!(app && app.status && CLIENT_TERMINAL_APP_STATUSES.indexOf(app.status) === -1);
+      var recentlyActive = !!(lastAppliedAt && (Date.now() - lastAppliedAt) < CLIENT_ACTIVE_WINDOW_MS);
+      var isActive = inProgress || recentlyActive;
+      var docCount = docs.filter(function (d) { return d.file_path; }).length;
+
+      return '<tr>' +
+        '<td style="display:flex;align-items:center;gap:9px;"><div class="ps-avatar ps-avatar-sm">' + escapeHTML((c.full_name || '?').charAt(0)) + '</div><strong>' + escapeHTML(c.full_name || 'Unnamed') + '</strong></td>' +
+        '<td>' + escapeHTML(c.email) + '</td>' +
+        '<td><span class="ps-badge ps-badge-' + (isActive ? 'green' : 'gray') + '">' + (isActive ? 'Active' : 'Inactive') + '</span></td>' +
+        '<td>' + docCount + ' uploaded</td>' +
+        '<td>' + (firstAppliedAt ? new Date(firstAppliedAt).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) : '—') + '</td>' +
+        '<td><button type="button" class="ps-btn ps-btn-outline ps-btn-sm js-open-client" data-client-id="' + c.id + '">View</button></td>' +
+      '</tr>';
+    }).join('');
+
+    tbody.querySelectorAll('.js-open-client').forEach(function (btn) {
+      btn.addEventListener('click', function () { openClientDetail(btn.getAttribute('data-client-id')); });
+    });
+  }
+
+  /* ------------------------------------------------------------------
      Shell: sidebar nav / mobile drawer / bell / sign out
      panelLoaders: { panelKey: function(){ ... } } called each time that
      panel is switched into (page-specific tab data loading).
@@ -372,44 +434,55 @@ window.PSStaff = (function () {
     });
   }
 
+  // A client can now have several rows of the same document_type (see
+  // supabase/add-document-categories.sql, which dropped the old
+  // one-row-per-type unique constraint), so this renders one card per
+  // actual row instead of one per fixed type, and every action is keyed
+  // by the row's id rather than its document_type.
   function renderClientDocuments(clientId, documentRows) {
     var container = document.getElementById('clientDetailDocuments');
-    var byType = {};
-    documentRows.forEach(function (d) { byType[d.document_type] = d; });
+    var typeByKey = {};
+    (window.CALESTIA_DOCUMENT_TYPES || []).forEach(function (t) { typeByKey[t.key] = t; });
 
-    container.innerHTML = (window.CALESTIA_DOCUMENT_TYPES || []).map(function (t) {
-      var doc = byType[t.key];
-      var hasFile = !!(doc && doc.file_path);
-      var badgeColor = hasFile ? (DOC_STATUS_BADGE[doc.status] || 'gray') : 'gray';
-      var badgeLabel = doc ? labelFor(window.CALESTIA_DOCUMENT_STATUSES, doc.status) : 'Not Uploaded';
+    if (!documentRows.length) {
+      container.innerHTML = '<p class="ps-hint">No documents uploaded yet</p>';
+      return;
+    }
+
+    container.innerHTML = documentRows.map(function (doc) {
+      var type = typeByKey[doc.document_type];
+      var badgeColor = DOC_STATUS_BADGE[doc.status] || 'gray';
+      var badgeLabel = labelFor(window.CALESTIA_DOCUMENT_STATUSES, doc.status);
+      var locked = doc.status === 'verified';
       return (
-        '<div class="ps-doc-card" data-doc-type="' + t.key + '">' +
-          '<div class="ps-doc-card-top"><h4>' + escapeHTML(t.label) + '</h4>' +
-          '<span class="ps-badge ps-badge-' + badgeColor + '">' + escapeHTML(hasFile ? badgeLabel : 'Not Uploaded') + '</span></div>' +
-          (hasFile ? '<div class="ps-doc-file-chip">' + window.PSIcon('file-text', 14) + '<span>' + escapeHTML(doc.file_name || '') + '</span></div>' : '<p class="ps-hint">No file uploaded yet</p>') +
-          (doc && doc.remarks ? '<div class="ps-doc-remark is-negative">' + window.PSIcon('message-square', 13) + '<span>' + escapeHTML(doc.remarks) + '</span></div>' : '') +
-          (hasFile ? '<div class="ps-doc-actions">' +
+        '<div class="ps-doc-card" data-doc-id="' + doc.id + '">' +
+          '<div class="ps-doc-card-top"><h4>' + escapeHTML(type ? type.label : doc.document_type) + '</h4>' +
+          '<span class="ps-badge ps-badge-' + badgeColor + '">' + escapeHTML(badgeLabel) + '</span></div>' +
+          '<div class="ps-doc-file-chip">' + window.PSIcon('file-text', 14) + '<span>' + escapeHTML(doc.file_name || '') + '</span></div>' +
+          (doc.remarks ? '<div class="ps-doc-remark is-negative">' + window.PSIcon('message-square', 13) + '<span>' + escapeHTML(doc.remarks) + '</span></div>' : '') +
+          '<div class="ps-doc-actions">' +
             '<button type="button" class="ps-btn ps-btn-outline ps-btn-sm" data-doc-action="preview">Preview</button>' +
             '<button type="button" class="ps-btn ps-btn-outline ps-btn-sm" data-doc-action="download">Download</button>' +
-            '<button type="button" class="ps-btn ps-btn-primary ps-btn-sm" data-doc-action="verify">Verify</button>' +
-            '<button type="button" class="ps-btn ps-btn-danger ps-btn-sm" data-doc-action="reject">Reject</button>' +
-            '<button type="button" class="ps-btn ps-btn-outline ps-btn-sm" data-doc-action="reupload">Request Re-upload</button>' +
-          '</div>' : '') +
+            (locked ? '' :
+              '<button type="button" class="ps-btn ps-btn-primary ps-btn-sm" data-doc-action="verify">Verify</button>' +
+              '<button type="button" class="ps-btn ps-btn-danger ps-btn-sm" data-doc-action="reject">Reject</button>' +
+              '<button type="button" class="ps-btn ps-btn-outline ps-btn-sm" data-doc-action="reupload">Request Re-upload</button>') +
+          '</div>' +
         '</div>'
       );
     }).join('');
 
     container.querySelectorAll('[data-doc-action]').forEach(function (btn) {
-      var row = btn.closest('[data-doc-type]');
-      var docType = row.getAttribute('data-doc-type');
+      var row = btn.closest('[data-doc-id]');
+      var docId = row.getAttribute('data-doc-id');
       var action = btn.getAttribute('data-doc-action');
-      btn.addEventListener('click', function () { handleDocAction(clientId, docType, action); });
+      btn.addEventListener('click', function () { handleDocAction(clientId, docId, action); });
     });
   }
 
-  function handleDocAction(clientId, docType, action) {
+  function handleDocAction(clientId, docId, action) {
     if (action === 'preview' || action === 'download') {
-      supabaseClient.from('documents').select('file_path, file_name').eq('client_id', clientId).eq('document_type', docType).maybeSingle()
+      supabaseClient.from('documents').select('file_path, file_name').eq('id', docId).maybeSingle()
         .then(function (result) {
           var path = result.data && result.data.file_path;
           if (!path) return null;
@@ -419,9 +492,9 @@ window.PSStaff = (function () {
         .catch(function () { toast('Could not open file.', true); });
       return;
     }
-    if (action === 'verify') { updateDocumentStatus(clientId, docType, 'verified', null); return; }
+    if (action === 'verify') { updateDocumentStatus(clientId, docId, 'verified', null); return; }
 
-    pendingDocAction = { kind: 'document', clientId: clientId, docType: docType, action: action };
+    pendingDocAction = { kind: 'document', clientId: clientId, docId: docId, action: action };
     document.getElementById('docActionTitle').textContent = action === 'reject' ? 'Reject document' : 'Request re-upload';
     document.getElementById('docActionRemark').value = '';
     var modal = document.getElementById('docActionModal');
@@ -457,7 +530,7 @@ window.PSStaff = (function () {
         updatePaymentStatus(pendingDocAction.clientId, pendingDocAction.paymentId, 'rejected', remark, pendingDocAction.onChanged || onChanged);
       } else {
         var status = pendingDocAction.action === 'reject' ? 'rejected' : 'reupload_requested';
-        updateDocumentStatus(pendingDocAction.clientId, pendingDocAction.docType, status, remark, onChanged);
+        updateDocumentStatus(pendingDocAction.clientId, pendingDocAction.docId, status, remark, onChanged);
       }
       modal.classList.remove('is-open');
       modal.setAttribute('aria-hidden', 'true');
@@ -465,12 +538,12 @@ window.PSStaff = (function () {
     });
   }
 
-  function updateDocumentStatus(clientId, docType, status, remark, onChanged) {
+  function updateDocumentStatus(clientId, docId, status, remark, onChanged) {
     var payload = { status: status, verified_by: profile.id, verified_at: new Date().toISOString() };
     if (remark !== null && remark !== undefined) payload.remarks = remark;
     if (status === 'verified') payload.remarks = null;
 
-    supabaseClient.from('documents').update(payload).eq('client_id', clientId).eq('document_type', docType)
+    supabaseClient.from('documents').update(payload).eq('id', docId)
       .then(function (result) {
         if (result.error) { toast(result.error.message || 'Could not update document.', true); return; }
         toast('Document updated.');
@@ -931,6 +1004,8 @@ window.PSStaff = (function () {
     exportCSV: exportCSV,
     loadAllProfiles: loadAllProfiles,
     profileName: profileName,
+    fetchClients: fetchClients,
+    renderClientsTable: renderClientsTable,
     get profilesCache() { return profilesCache; },
     wireShell: wireShell,
     goToPanel: goToPanel,

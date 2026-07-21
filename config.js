@@ -18,15 +18,29 @@ window.CALESTIA_SUPABASE_ANON_KEY = 'sb_publishable_tSAwI-7s5WNHyLBU4bTihA_j8qFx
    exactly.
    ========================================================================== */
 window.CALESTIA_DOCUMENT_TYPES = [
-  { key: 'passport', label: 'Passport', description: 'Self-signed passport bio page. Include your old passport too if your last Japan visa is in it.' },
-  { key: 'visa_application_form', label: 'Visa Application Form', description: 'Must be typed and signed. Download the blank form from Forms & Checklist.' },
-  { key: 'birth_certificate', label: 'Birth Certificate', description: 'PSA-issued within the last year. Not required if you have a previous Japan visa.' },
-  { key: 'marriage_certificate', label: 'Marriage Certificate', description: 'PSA-issued within the last year, if applicable.' },
-  { key: 'bank_certificate', label: 'Bank Certificate', description: 'Must show your Average Daily Balance (ADB) for the last 6 months.' },
-  { key: 'certificate_of_employment', label: 'Certificate of Employment (COE)', description: 'Must indicate employment period, salary, and position.' },
-  { key: 'business_documents', label: 'Business Documents', description: 'DTI/SEC registration, Mayor’s Permit, and ITR — for business owners.' },
-  { key: 'student_documents', label: 'Student Documents', description: 'School ID and Certificate of Enrollment — for students.' },
-  { key: 'additional_documents', label: 'Additional Documents', description: 'Anything else requested by Calestia or the Embassy.' }
+  { key: 'passport', label: 'Passport', category: 'identity', description: 'Self-signed passport bio page. Include your old passport too if your last Japan visa is in it.' },
+  { key: 'birth_certificate', label: 'Birth Certificate', category: 'identity', description: 'PSA-issued within the last year. Not required if you have a previous Japan visa.' },
+  { key: 'marriage_certificate', label: 'Marriage Certificate', category: 'identity', description: 'PSA-issued within the last year, if applicable.' },
+  { key: 'bank_certificate', label: 'Bank Certificate', category: 'financial', description: 'Must show your Average Daily Balance (ADB) for the last 6 months.' },
+  { key: 'certificate_of_employment', label: 'Certificate of Employment (COE)', category: 'financial', description: 'Must indicate employment period, salary, and position.' },
+  { key: 'visa_application_form', label: 'Visa Application Form', category: 'application_form', description: 'Must be typed and signed. Download the blank form from Forms & Checklist.' },
+  { key: 'business_documents', label: 'Business Documents', category: 'supporting', description: 'DTI/SEC registration, Mayor’s Permit, and ITR — for business owners.' },
+  { key: 'student_documents', label: 'Student Documents', category: 'supporting', description: 'School ID and Certificate of Enrollment — for students.' },
+  { key: 'additional_documents', label: 'Additional Documents', category: 'additional', description: 'Anything else requested by Calestia or the Embassy.' }
+];
+
+/* ==========================================================================
+   Document categories — group the 9 document types above into the 5
+   sections shown in the "Add Documents" upload dialog on the client
+   portal's My Documents page. Keys match the `category` CHECK constraint
+   added by supabase/add-document-categories.sql exactly.
+   ========================================================================== */
+window.CALESTIA_DOCUMENT_CATEGORIES = [
+  { key: 'identity', label: 'Identity & Civil Documents', shortLabel: 'Identity', description: 'Passport, Birth Certificate, Marriage Certificate.' },
+  { key: 'financial', label: 'Financial Documents', shortLabel: 'Financial', description: 'Bank Certificate, Certificate of Employment (COE).' },
+  { key: 'application_form', label: 'Application Forms', shortLabel: 'Application Form', description: 'The Visa Application Form.' },
+  { key: 'supporting', label: 'Supporting Documents', shortLabel: 'Supporting', description: 'Business Documents, Student Documents.' },
+  { key: 'additional', label: 'Additional Documents', shortLabel: 'Additional', description: 'Anything else requested by Calestia or the Embassy.' }
 ];
 
 window.CALESTIA_APPLICATION_STATUSES = [

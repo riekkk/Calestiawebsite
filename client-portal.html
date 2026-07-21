@@ -215,9 +215,33 @@
               <h2>My Documents</h2>
               <p>Upload and manage all required visa documents. Accepted formats: PDF, JPG, PNG. Max 10&nbsp;MB.</p>
             </div>
+            <button type="button" class="ps-btn ps-btn-primary ps-btn-sm" id="psAddDocumentsBtn">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Documents
+            </button>
           </div>
-          <div class="ps-grid ps-grid-3" id="psDocumentsGrid">
-            <p class="ps-hint">Loading your documents…</p>
+
+          <div class="ps-empty is-hidden" id="psDocumentsLocked" style="grid-column:1/-1;"></div>
+
+          <div class="ps-card is-hidden" id="psDocumentsTableCard">
+            <div class="ps-table-wrap">
+              <table class="ps-table">
+                <thead><tr><th>Name</th><th>Category</th><th>Status</th><th>Uploaded</th><th>Remarks</th><th></th></tr></thead>
+                <tbody id="psDocumentsTableBody"><tr><td colspan="6" class="ps-table-hint">Loading your documents…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="ps-empty is-hidden" id="psDocumentsEmpty">
+            <div class="ps-empty-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h6M9 9h1"/></svg>
+            </div>
+            <h3>No documents uploaded yet</h3>
+            <p>Add your visa documents by category — you can queue several files at once and upload them together.</p>
+            <button type="button" class="ps-btn ps-btn-primary" id="psAddDocumentsBtn2">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Documents
+            </button>
           </div>
         </section>
 
@@ -304,26 +328,45 @@
     </div>
   </div>
 
-  <!-- ==================== UPLOAD DOCUMENT MODAL ==================== -->
+  <!-- ==================== REPLACE DOCUMENT MODAL ==================== -->
   <div class="ps-modal" id="uploadModal" aria-hidden="true">
     <div class="ps-modal-backdrop" data-close-modal="uploadModal"></div>
     <div class="ps-modal-card" role="dialog" aria-modal="true">
       <div class="ps-modal-head">
-        <div><h2 id="uploadModalTitle">Upload Document</h2></div>
+        <div><h2 id="uploadModalTitle">Replace Document</h2></div>
         <button type="button" class="auth-close" data-close-modal="uploadModal" aria-label="Close">✕</button>
       </div>
       <div class="ps-modal-body">
         <input type="file" id="uploadFileInput" accept=".pdf,.jpg,.jpeg,.png" style="display:none;" />
         <div id="uploadDropzone" style="border:2px dashed #dbe9f7;background:var(--sky-lt);border-radius:18px;padding:40px 20px;text-align:center;cursor:pointer;">
           <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--navy);margin:0 auto 10px;"><path d="M12 20V8"/><path d="m7 13 5-5 5 5"/><path d="M4 20h16"/></svg>
-          <p style="font-weight:600;color:var(--navy-dk);margin-bottom:4px;">Click to choose a file</p>
+          <p style="font-weight:600;color:var(--navy-dk);margin-bottom:4px;">Click to choose a replacement file</p>
           <p class="ps-hint">PDF, JPG, JPEG, PNG · Max 10&nbsp;MB</p>
           <p class="ps-hint" id="uploadSelectedFileName" style="margin-top:10px;font-weight:600;"></p>
         </div>
         <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
           <button type="button" class="ps-btn ps-btn-outline" data-close-modal="uploadModal">Cancel</button>
-          <button type="button" class="ps-btn ps-btn-primary" id="uploadConfirmBtn" disabled>Upload</button>
+          <button type="button" class="ps-btn ps-btn-primary" id="uploadConfirmBtn" disabled>Replace</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== ADD DOCUMENTS MODAL (category batch upload) ==================== -->
+  <div class="ps-modal" id="addDocumentsModal" aria-hidden="true">
+    <div class="ps-modal-backdrop" data-close-modal="addDocumentsModal"></div>
+    <div class="ps-modal-card ps-modal-card-lg" role="dialog" aria-modal="true" aria-labelledby="addDocumentsModalTitle">
+      <div class="ps-modal-head">
+        <div>
+          <h2 id="addDocumentsModalTitle">Add Documents</h2>
+          <p>Queue files under each category, then upload everything in one go.</p>
+        </div>
+        <button type="button" class="auth-close" data-close-modal="addDocumentsModal" aria-label="Close">✕</button>
+      </div>
+      <div class="ps-modal-body" id="addDocumentsBody"></div>
+      <div class="ps-add-docs-footer">
+        <button type="button" class="ps-btn ps-btn-outline" data-close-modal="addDocumentsModal">Cancel</button>
+        <button type="button" class="ps-btn ps-btn-primary" id="addDocumentsUploadBtn" disabled>Upload All (0)</button>
       </div>
     </div>
   </div>

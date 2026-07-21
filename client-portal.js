@@ -23,9 +23,10 @@
 
   var session = null;
   var profile = null;
-  var documentsByType = {};
+  var documentsRows = [];
   var notificationRows = [];
-  var uploadDocType = null;
+  var uploadDocId = null; // Replace-modal target row
+  var addDocsQueue = []; // Add Documents dialog: [{ localId, file, category, docType }]
   var reviewSelectedRating = 0;
   var ownReview = null;
 
@@ -238,13 +239,13 @@
       confirmBtn.disabled = !selectedFile;
     });
     confirmBtn.addEventListener('click', function () {
-      if (selectedFile && uploadDocType) handleDocumentUpload(uploadDocType, selectedFile);
+      if (selectedFile && uploadDocId) handleReplaceDocument(uploadDocId, selectedFile);
     });
 
     document.getElementById('psWriteReviewBtn').addEventListener('click', openReviewModal);
     document.getElementById('reviewSubmitBtn').addEventListener('click', submitReview);
 
-    function resetUploadModal() { selectedFile = null; fileInput.value = ''; selectedName.textContent = ''; confirmBtn.disabled = true; confirmBtn.textContent = 'Upload'; }
+    function resetUploadModal() { selectedFile = null; fileInput.value = ''; selectedName.textContent = ''; confirmBtn.disabled = true; confirmBtn.textContent = 'Replace'; }
     window.addEventListener('ps:modal-closed:uploadModal', resetUploadModal);
 
     document.getElementById('psApplyVisaBtn').addEventListener('click', function () { openApplyVisaModal(); });
@@ -252,6 +253,12 @@
     if (applyVisaBtn2) applyVisaBtn2.addEventListener('click', function () { openApplyVisaModal(); });
     document.getElementById('dashApplyVisaBtn').addEventListener('click', function () { openApplyVisaModal(); });
     window.addEventListener('ps:modal-closed:applyVisaModal', resetApplyVisaModal);
+
+    document.getElementById('psAddDocumentsBtn').addEventListener('click', openAddDocumentsModal);
+    var addDocsBtn2 = document.getElementById('psAddDocumentsBtn2');
+    if (addDocsBtn2) addDocsBtn2.addEventListener('click', openAddDocumentsModal);
+    window.addEventListener('ps:modal-closed:addDocumentsModal', resetAddDocumentsModal);
+    document.getElementById('addDocumentsUploadBtn').addEventListener('click', handleAddDocumentsUpload);
 
     document.getElementById('contactSendBtn').addEventListener('click', handleContactSend);
   }
@@ -529,7 +536,24 @@
     container.querySelectorAll('[data-app-view]').forEach(function (btn) {
       btn.addEventListener('click', function () { openApplyVisaModalForBatch(btn.getAttribute('data-app-view'), 'summary'); });
     });
+    container.querySelectorAll('[data-app-kebab]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var menu = container.querySelector('[data-app-kebab-menu="' + btn.getAttribute('data-app-kebab') + '"]');
+        var wasOpen = menu.classList.contains('is-open');
+        container.querySelectorAll('.ps-kebab-menu.is-open').forEach(function (m) { m.classList.remove('is-open'); });
+        if (!wasOpen) menu.classList.add('is-open');
+      });
+    });
+    container.querySelectorAll('[data-app-cancel]').forEach(function (btn) {
+      btn.addEventListener('click', function () { handleCancelApplication(btn.getAttribute('data-app-cancel')); });
+    });
   }
+
+  document.addEventListener('click', function (e) {
+    if (e.target.closest && e.target.closest('.ps-kebab')) return;
+    document.querySelectorAll('.ps-kebab-menu.is-open').forEach(function (m) { m.classList.remove('is-open'); });
+  });
 
   function applicationGroupCardHTML(g) {
     var display = parseVisaTypeDisplay(g.visaType);
@@ -548,6 +572,17 @@
       actionHTML = '<button type="button" class="ps-btn ps-btn-danger" data-app-continue="' + g.batchId + '">Re-submit Payment</button>';
     }
 
+    // Cancel is only offered while nothing has been submitted for
+    // verification yet — once a payment exists, staff has to handle it.
+    var kebabHTML = '';
+    if (g.status === 'waiting_for_payment') {
+      kebabHTML = '<div class="ps-kebab">' +
+        '<button type="button" class="ps-kebab-btn" data-app-kebab="' + g.batchId + '" aria-label="More actions">' + window.PSIcon('more-horizontal', 16) + '</button>' +
+        '<div class="ps-kebab-menu" data-app-kebab-menu="' + g.batchId + '">' +
+        '<button type="button" class="is-danger" data-app-cancel="' + g.batchId + '">' + window.PSIcon('x-circle', 15) + ' Cancel Application</button>' +
+        '</div></div>';
+    }
+
     return '<div class="ps-app-card">' +
       '<div class="ps-app-card-flag">' + flag + '</div>' +
       '<div class="ps-app-card-main">' +
@@ -557,7 +592,7 @@
       (display.subtype ? '<span>' + escapeHTML(display.subtype) + '</span><span class="ps-app-card-meta-dot"></span>' : '') +
       '<span>' + count + ' Applicant' + (count === 1 ? '' : 's') + '</span>' +
       '</div></div>' +
-      '<div class="ps-app-card-action">' + actionHTML + '</div>' +
+      '<div class="ps-app-card-action">' + actionHTML + kebabHTML + '</div>' +
       '</div>';
   }
 
@@ -687,6 +722,19 @@
         renderDashboardAndVisaPages();
       })
       .catch(function () { showToast('Something went wrong.', true); });
+  }
+
+  // Only offered while an application is still "Waiting for Payment"
+  // (enforced again server-side by the cancel_application_batch RPC).
+  function handleCancelApplication(batchId) {
+    if (!window.confirm('Are you sure? This will delete this application and any submitted payment.')) return;
+    supabaseClient.rpc('cancel_application_batch', { p_batch_id: batchId })
+      .then(function (result) {
+        if (result.error) throw result.error;
+        showToast('Application cancelled.');
+        return refreshClientCoreData();
+      })
+      .catch(function (err) { showToast((err && err.message) || 'Could not cancel application.', true); });
   }
 
   function readApplicantFormFields() {
@@ -1147,19 +1195,32 @@
 
   function renderDocumentsPanel() {
     if (!documentsAccessState) return;
-    if (documentsAccessState.allowed) loadDocuments();
-    else renderDocumentsLockedState(documentsAccessState.reason);
+    var lockedEl = document.getElementById('psDocumentsLocked');
+    var tableCard = document.getElementById('psDocumentsTableCard');
+    var emptyState = document.getElementById('psDocumentsEmpty');
+    var addBtn = document.getElementById('psAddDocumentsBtn');
+
+    if (documentsAccessState.allowed) {
+      lockedEl.classList.add('is-hidden');
+      if (addBtn) addBtn.classList.remove('is-hidden');
+      loadDocuments();
+    } else {
+      tableCard.classList.add('is-hidden');
+      emptyState.classList.add('is-hidden');
+      if (addBtn) addBtn.classList.add('is-hidden');
+      lockedEl.classList.remove('is-hidden');
+      renderDocumentsLockedState(documentsAccessState.reason);
+    }
   }
 
   function renderDocumentsLockedState(reason) {
     var info = DOCS_LOCK_MESSAGES[reason] || DOCS_LOCK_MESSAGES.no_application;
-    var grid = document.getElementById('psDocumentsGrid');
+    var grid = document.getElementById('psDocumentsLocked');
     if (!grid) return;
 
     var ctaHTML = info.cta ? '<button type="button" class="ps-btn ps-btn-primary" id="psDocsLockedCtaBtn">' + escapeHTML(info.cta) + '</button>' : '';
 
     grid.innerHTML =
-      '<div class="ps-empty" style="grid-column:1/-1;">' +
       '<div class="ps-empty-icon" style="position:relative;">' + window.PSIcon('file-text', 26) +
       '<span style="position:absolute;bottom:-2px;right:-2px;width:20px;height:20px;border-radius:50%;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;">' + window.PSIcon('lock', 11) + '</span>' +
       '</div>' +
@@ -1168,7 +1229,6 @@
       '<div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;">' +
       ctaHTML +
       '<button type="button" class="ps-btn ps-btn-outline" id="psDocsRefreshStatusBtn">Refresh Status</button>' +
-      '</div>' +
       '</div>';
 
     var ctaBtn = document.getElementById('psDocsLockedCtaBtn');
@@ -1199,7 +1259,11 @@
   }
 
   /* ==================================================================
-     Documents
+     Documents — one table row per uploaded file (a client can now have
+     several files per document_type/category; see
+     supabase/add-document-categories.sql). Replace/Delete are only
+     offered while a row hasn't been verified yet — once staff verifies
+     it, they own it (mirrors the Cancel Application rule).
      ================================================================== */
   function loadDocuments() {
     supabaseClient.from('documents').select('*').eq('client_id', session.user.id)
@@ -1213,137 +1277,324 @@
   var DOC_STATUS_LABEL = {};
   (window.CALESTIA_DOCUMENT_STATUSES || []).forEach(function (s) { DOC_STATUS_LABEL[s.key] = s.label; });
 
+  function docTypesByKey() {
+    var map = {};
+    (window.CALESTIA_DOCUMENT_TYPES || []).forEach(function (t) { map[t.key] = t; });
+    return map;
+  }
+  function docCategoriesByKey() {
+    var map = {};
+    (window.CALESTIA_DOCUMENT_CATEGORIES || []).forEach(function (c) { map[c.key] = c; });
+    return map;
+  }
+
   function renderDocuments(rows) {
-    documentsByType = {};
-    rows.forEach(function (d) { documentsByType[d.document_type] = d; });
+    documentsRows = (rows || []).slice().sort(function (a, b) {
+      return new Date(b.uploaded_at || b.created_at) - new Date(a.uploaded_at || a.created_at);
+    });
 
-    var types = window.CALESTIA_DOCUMENT_TYPES || [];
     var pendingActions = 0;
-
-    var html = types.map(function (t) {
-      var doc = documentsByType[t.key];
-      var hasFile = !!(doc && doc.file_path);
-      if (doc && (doc.status === 'rejected' || doc.status === 'reupload_requested')) pendingActions++;
-
-      var badgeColor = hasFile ? (DOC_STATUS_BADGE[doc.status] || 'gray') : 'gray';
-      var badgeLabel = hasFile ? (DOC_STATUS_LABEL[doc.status] || doc.status) : 'Not Uploaded';
-
-      var remarkHTML = '';
-      if (doc && doc.remarks) {
-        var negative = doc.status === 'rejected' || doc.status === 'reupload_requested';
-        remarkHTML = '<div class="ps-doc-remark ' + (negative ? 'is-negative' : 'is-positive') + '">' + window.PSIcon('message-square', 13) + '<span>' + escapeHTML(doc.remarks) + '</span></div>';
-      }
-
-      var fileChip = hasFile ? '<div class="ps-doc-file-chip">' + window.PSIcon('file-text', 14) + '<span>' + escapeHTML(doc.file_name || 'file') + '</span></div>' : '';
-
-      var actions = hasFile
-        ? '<div class="ps-doc-actions">' +
-            '<button type="button" class="ps-btn ps-btn-outline ps-btn-sm" data-doc-replace="' + t.key + '">Replace</button>' +
-            '<button type="button" class="ps-btn ps-btn-outline ps-btn-sm" data-doc-preview="' + t.key + '">Preview</button>' +
-            '<button type="button" class="ps-btn ps-btn-danger ps-btn-sm" data-doc-remove="' + t.key + '">Remove</button>' +
-          '</div>'
-        : '<button type="button" class="ps-btn ps-btn-primary" style="width:100%;justify-content:center;" data-doc-replace="' + t.key + '">' + window.PSIcon('upload', 14) + ' Upload File</button>';
-
-      return '<div class="ps-doc-card">' +
-        '<div class="ps-doc-card-top"><div><h4>' + escapeHTML(t.label) + '</h4><p>' + escapeHTML(t.description) + '</p></div>' +
-        '<span class="ps-badge ps-badge-' + badgeColor + '">' + escapeHTML(badgeLabel) + '</span></div>' +
-        fileChip + remarkHTML + actions +
-        '</div>';
-    }).join('');
-
-    document.getElementById('psDocumentsGrid').innerHTML = html;
-
+    documentsRows.forEach(function (d) { if (d.status === 'rejected' || d.status === 'reupload_requested') pendingActions++; });
     var navBadge = document.getElementById('psNavDocsBadge');
     if (pendingActions > 0) { navBadge.textContent = String(pendingActions); navBadge.classList.remove('is-hidden'); }
     else navBadge.classList.add('is-hidden');
 
-    document.querySelectorAll('[data-doc-replace]').forEach(function (btn) {
-      btn.addEventListener('click', function () { openUploadModal(btn.getAttribute('data-doc-replace')); });
+    var tableCard = document.getElementById('psDocumentsTableCard');
+    var emptyState = document.getElementById('psDocumentsEmpty');
+    if (!documentsRows.length) {
+      tableCard.classList.add('is-hidden');
+      emptyState.classList.remove('is-hidden');
+      return;
+    }
+    tableCard.classList.remove('is-hidden');
+    emptyState.classList.add('is-hidden');
+
+    var typeByKey = docTypesByKey();
+    var catByKey = docCategoriesByKey();
+
+    document.getElementById('psDocumentsTableBody').innerHTML = documentsRows.map(function (d) {
+      var type = typeByKey[d.document_type];
+      var cat = catByKey[d.category];
+      var badgeColor = DOC_STATUS_BADGE[d.status] || 'gray';
+      var badgeLabel = DOC_STATUS_LABEL[d.status] || d.status;
+      var ext = (d.file_name || '').split('.').pop().toUpperCase().slice(0, 4) || 'FILE';
+      var locked = d.status === 'verified';
+
+      var menuItems =
+        '<button type="button" data-doc-preview="' + d.id + '">' + window.PSIcon('eye', 14) + ' View</button>' +
+        '<button type="button" data-doc-download="' + d.id + '">' + window.PSIcon('download', 14) + ' Download</button>' +
+        (locked ? '' :
+          '<button type="button" data-doc-replace="' + d.id + '">' + window.PSIcon('upload', 14) + ' Replace</button>' +
+          '<button type="button" class="is-danger" data-doc-delete="' + d.id + '">' + window.PSIcon('trash', 14) + ' Delete</button>');
+
+      return '<tr>' +
+        '<td><div style="display:flex;align-items:center;gap:8px;"><span class="ps-badge ps-badge-gray" style="font-size:0.65rem;padding:2px 8px;">' + escapeHTML(ext) + '</span><span>' + escapeHTML(d.file_name || (type ? type.label : d.document_type)) + '</span></div></td>' +
+        '<td>' + escapeHTML(cat ? cat.shortLabel : (type ? type.label : '—')) + '</td>' +
+        '<td><span class="ps-badge ps-badge-' + badgeColor + '">' + escapeHTML(badgeLabel) + '</span></td>' +
+        '<td>' + escapeHTML(timeAgo(d.uploaded_at || d.created_at)) + '</td>' +
+        '<td>' + (d.remarks ? escapeHTML(d.remarks) : '—') + '</td>' +
+        '<td><div class="ps-kebab"><button type="button" class="ps-kebab-btn" data-doc-kebab="' + d.id + '" aria-label="Document actions">' + window.PSIcon('more-horizontal', 16) + '</button>' +
+        '<div class="ps-kebab-menu" data-doc-kebab-menu="' + d.id + '">' + menuItems + '</div></div></td>' +
+      '</tr>';
+    }).join('');
+
+    wireDocumentsTableActions();
+  }
+
+  function wireDocumentsTableActions() {
+    var tbody = document.getElementById('psDocumentsTableBody');
+    tbody.querySelectorAll('[data-doc-kebab]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var menu = tbody.querySelector('[data-doc-kebab-menu="' + btn.getAttribute('data-doc-kebab') + '"]');
+        var wasOpen = menu.classList.contains('is-open');
+        document.querySelectorAll('.ps-kebab-menu.is-open').forEach(function (m) { m.classList.remove('is-open'); });
+        if (!wasOpen) menu.classList.add('is-open');
+      });
     });
-    document.querySelectorAll('[data-doc-preview]').forEach(function (btn) {
-      btn.addEventListener('click', function () { openDocumentPreview(btn.getAttribute('data-doc-preview')); });
+    tbody.querySelectorAll('[data-doc-preview]').forEach(function (btn) {
+      btn.addEventListener('click', function () { openDocumentFile(btn.getAttribute('data-doc-preview'), false); });
     });
-    document.querySelectorAll('[data-doc-remove]').forEach(function (btn) {
-      btn.addEventListener('click', function () { handleDocumentRemove(btn.getAttribute('data-doc-remove')); });
+    tbody.querySelectorAll('[data-doc-download]').forEach(function (btn) {
+      btn.addEventListener('click', function () { openDocumentFile(btn.getAttribute('data-doc-download'), true); });
+    });
+    tbody.querySelectorAll('[data-doc-replace]').forEach(function (btn) {
+      btn.addEventListener('click', function () { openReplaceModal(btn.getAttribute('data-doc-replace')); });
+    });
+    tbody.querySelectorAll('[data-doc-delete]').forEach(function (btn) {
+      btn.addEventListener('click', function () { handleDocumentDelete(btn.getAttribute('data-doc-delete')); });
     });
   }
 
-  function openUploadModal(docType) {
-    uploadDocType = docType;
-    var type = (window.CALESTIA_DOCUMENT_TYPES || []).filter(function (t) { return t.key === docType; })[0];
-    document.getElementById('uploadModalTitle').textContent = 'Upload — ' + (type ? type.label : docType);
+  function openReplaceModal(docId) {
+    var row = documentsRows.filter(function (d) { return d.id === docId; })[0];
+    if (!row) return;
+    uploadDocId = docId;
+    var type = docTypesByKey()[row.document_type];
+    document.getElementById('uploadModalTitle').textContent = 'Replace — ' + (type ? type.label : row.document_type);
     openModal('uploadModal');
   }
 
-  function handleDocumentUpload(docType, file) {
+  function handleReplaceDocument(docId, file) {
     if (ALLOWED_DOC_MIME.indexOf(file.type) === -1) { showToast('Only PDF, JPG, JPEG, or PNG files are allowed.', true); return; }
     if (file.size > MAX_DOC_BYTES) { showToast('File is too large. Maximum size is 10 MB.', true); return; }
 
+    var row = documentsRows.filter(function (d) { return d.id === docId; })[0];
+    if (!row) return;
+
     var confirmBtn = document.getElementById('uploadConfirmBtn');
     confirmBtn.disabled = true;
-    confirmBtn.textContent = 'Uploading…';
+    confirmBtn.textContent = 'Replacing…';
 
     var clientId = session.user.id;
-    var path = clientId + '/' + docType + '/' + Date.now() + '-' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    var path = clientId + '/' + row.category + '/' + row.document_type + '/' + Date.now() + '-' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    var oldPath = row.file_path;
 
-    supabaseClient.from('documents').select('file_path').eq('client_id', clientId).eq('document_type', docType).maybeSingle()
-      .then(function (existing) {
-        var oldPath = existing.data && existing.data.file_path;
-        return supabaseClient.storage.from(DOCUMENTS_BUCKET).upload(path, file, { upsert: false })
-          .then(function (uploadResult) {
-            if (uploadResult.error) throw uploadResult.error;
-            if (oldPath) supabaseClient.storage.from(DOCUMENTS_BUCKET).remove([oldPath]).catch(function () {});
-            return supabaseClient.from('documents').upsert({
-              client_id: clientId, document_type: docType, file_path: path, file_name: file.name,
-              file_size: file.size, mime_type: file.type, uploaded_at: new Date().toISOString(), status: 'pending'
-            }, { onConflict: 'client_id,document_type' });
-          });
+    supabaseClient.storage.from(DOCUMENTS_BUCKET).upload(path, file, { upsert: false })
+      .then(function (uploadResult) {
+        if (uploadResult.error) throw uploadResult.error;
+        return supabaseClient.from('documents').update({
+          file_path: path, file_name: file.name, file_size: file.size, mime_type: file.type,
+          uploaded_at: new Date().toISOString(), status: 'pending'
+        }).eq('id', docId);
       })
-      .then(function (upsertResult) {
-        if (upsertResult && upsertResult.error) throw upsertResult.error;
+      .then(function (updateResult) {
+        if (updateResult && updateResult.error) throw updateResult.error;
+        if (oldPath) supabaseClient.storage.from(DOCUMENTS_BUCKET).remove([oldPath]).catch(function () {});
         showToast(file.name + ' uploaded successfully.');
         closeModal('uploadModal');
         loadDocuments();
       })
       .catch(function (err) {
         confirmBtn.disabled = false;
-        confirmBtn.textContent = 'Upload';
+        confirmBtn.textContent = 'Replace';
         showToast((err && err.message) || 'Upload failed. Please try again.', true);
       });
   }
 
-  function handleDocumentRemove(docType) {
-    var clientId = session.user.id;
-    supabaseClient.from('documents').select('file_path').eq('client_id', clientId).eq('document_type', docType).maybeSingle()
-      .then(function (existing) {
-        var oldPath = existing.data && existing.data.file_path;
-        var removeStorage = oldPath ? supabaseClient.storage.from(DOCUMENTS_BUCKET).remove([oldPath]) : Promise.resolve();
-        return removeStorage.then(function () {
-          return supabaseClient.from('documents').update({
-            file_path: null, file_name: null, file_size: null, mime_type: null, uploaded_at: null, status: 'pending'
-          }).eq('client_id', clientId).eq('document_type', docType);
-        });
-      })
+  function handleDocumentDelete(docId) {
+    var row = documentsRows.filter(function (d) { return d.id === docId; })[0];
+    if (!row) return;
+    if (!window.confirm('Delete "' + (row.file_name || 'this document') + '"? This cannot be undone.')) return;
+
+    supabaseClient.from('documents').delete().eq('id', docId)
       .then(function (result) {
-        if (result && result.error) throw result.error;
-        showToast('File removed.');
+        if (result.error) throw result.error;
+        if (row.file_path) supabaseClient.storage.from(DOCUMENTS_BUCKET).remove([row.file_path]).catch(function () {});
+        showToast('Document deleted.');
         loadDocuments();
       })
-      .catch(function (err) { showToast((err && err.message) || 'Could not remove file.', true); });
+      .catch(function (err) { showToast((err && err.message) || 'Could not delete document.', true); });
   }
 
-  function openDocumentPreview(docType) {
-    var clientId = session.user.id;
-    supabaseClient.from('documents').select('file_path').eq('client_id', clientId).eq('document_type', docType).maybeSingle()
-      .then(function (result) {
-        var path = result.data && result.data.file_path;
-        if (!path) return null;
-        return supabaseClient.storage.from(DOCUMENTS_BUCKET).createSignedUrl(path, 300);
-      })
+  function openDocumentFile(docId, download) {
+    var row = documentsRows.filter(function (d) { return d.id === docId; })[0];
+    var path = row && row.file_path;
+    if (!path) return;
+    supabaseClient.storage.from(DOCUMENTS_BUCKET).createSignedUrl(path, 300, download ? { download: row.file_name } : undefined)
       .then(function (signed) {
         if (signed && signed.data && signed.data.signedUrl) window.open(signed.data.signedUrl, '_blank', 'noopener');
       })
       .catch(function () { showToast('Could not open file.', true); });
+  }
+
+  /* ------------------------------------------------------------------
+     Add Documents modal — queue files across the 5 categories, then
+     upload everything with one "Upload All" click. Failed items stay in
+     the queue (with an error chip) so the client can retry instead of
+     losing the whole batch.
+     ------------------------------------------------------------------ */
+  function guessDocType(category, filename) {
+    var candidates = (window.CALESTIA_DOCUMENT_TYPES || []).filter(function (t) { return t.category === category; });
+    var lower = (filename || '').toLowerCase();
+    var match = candidates.filter(function (t) {
+      return lower.indexOf(t.key.replace(/_/g, ' ')) !== -1 || lower.indexOf(t.key.replace(/_/g, '')) !== -1 || lower.indexOf(t.key.split('_')[0]) !== -1;
+    })[0];
+    return (match || candidates[0] || {}).key || '';
+  }
+
+  function openAddDocumentsModal() {
+    renderAddDocumentsBody();
+    openModal('addDocumentsModal');
+  }
+
+  function resetAddDocumentsModal() {
+    addDocsQueue = [];
+  }
+
+  function renderAddDocumentsBody() {
+    var categories = window.CALESTIA_DOCUMENT_CATEGORIES || [];
+    document.getElementById('addDocumentsBody').innerHTML = categories.map(function (cat, i) {
+      return '<details class="ps-doc-cat"' + (i === 0 ? ' open' : '') + ' data-cat="' + cat.key + '">' +
+        '<summary><span>' + escapeHTML(cat.label) + '</span>' + window.PSIcon('chevron-down', 16, 'class="ps-doc-cat-chevron"') + '</summary>' +
+        '<div class="ps-doc-cat-body">' +
+        '<p>' + escapeHTML(cat.description) + '</p>' +
+        '<input type="file" multiple accept=".pdf,.jpg,.jpeg,.png" style="display:none;" data-cat-file-input="' + cat.key + '" />' +
+        '<button type="button" class="ps-btn ps-btn-outline ps-btn-sm" data-cat-add-file="' + cat.key + '">' + window.PSIcon('plus', 13) + ' Add File</button>' +
+        '<div class="ps-doc-queue" data-cat-queue="' + cat.key + '"></div>' +
+        '</div></details>';
+    }).join('');
+
+    document.querySelectorAll('[data-cat-add-file]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        document.querySelector('[data-cat-file-input="' + btn.getAttribute('data-cat-add-file') + '"]').click();
+      });
+    });
+    document.querySelectorAll('[data-cat-file-input]').forEach(function (input) {
+      input.addEventListener('change', function () {
+        var category = input.getAttribute('data-cat-file-input');
+        Array.prototype.forEach.call(input.files || [], function (file) {
+          addDocsQueue.push({
+            localId: 'q' + Date.now() + Math.random().toString(36).slice(2),
+            file: file, category: category, docType: guessDocType(category, file.name),
+            status: 'queued', error: null
+          });
+        });
+        input.value = '';
+        renderCategoryQueue(category);
+        updateUploadAllButton();
+      });
+    });
+
+    categories.forEach(function (cat) { renderCategoryQueue(cat.key); });
+    updateUploadAllButton();
+  }
+
+  function renderCategoryQueue(category) {
+    var container = document.querySelector('[data-cat-queue="' + category + '"]');
+    if (!container) return;
+    var items = addDocsQueue.filter(function (q) { return q.category === category; });
+    var typeOptions = (window.CALESTIA_DOCUMENT_TYPES || []).filter(function (t) { return t.category === category; });
+
+    container.innerHTML = items.map(function (q) {
+      var sizeKB = Math.round(q.file.size / 1024);
+      var sizeLabel = sizeKB > 1024 ? (sizeKB / 1024).toFixed(1) + ' MB' : sizeKB + ' KB';
+      var optionsHTML = typeOptions.map(function (t) {
+        return '<option value="' + t.key + '"' + (t.key === q.docType ? ' selected' : '') + '>' + escapeHTML(t.label) + '</option>';
+      }).join('');
+      var statusHTML = q.status === 'uploading' ? '<span class="ps-doc-chip-status is-uploading">Uploading…</span>' : '';
+      return '<div class="ps-doc-chip' + (q.status === 'error' ? ' is-error' : '') + '" data-chip="' + q.localId + '">' +
+        '<span class="ps-doc-chip-name">' + escapeHTML(q.file.name) + '</span>' +
+        '<span class="ps-doc-chip-size">' + sizeLabel + '</span>' +
+        '<select data-chip-type="' + q.localId + '">' + optionsHTML + '</select>' +
+        statusHTML +
+        '<button type="button" class="ps-doc-chip-remove" data-chip-remove="' + q.localId + '" aria-label="Remove">' + window.PSIcon('x', 13) + '</button>' +
+        (q.error ? '<span class="ps-doc-chip-error">' + escapeHTML(q.error) + '</span>' : '') +
+        '</div>';
+    }).join('');
+
+    container.querySelectorAll('[data-chip-remove]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-chip-remove');
+        addDocsQueue = addDocsQueue.filter(function (q) { return q.localId !== id; });
+        renderCategoryQueue(category);
+        updateUploadAllButton();
+      });
+    });
+    container.querySelectorAll('[data-chip-type]').forEach(function (sel) {
+      sel.addEventListener('change', function () {
+        var id = sel.getAttribute('data-chip-type');
+        var item = addDocsQueue.filter(function (q) { return q.localId === id; })[0];
+        if (item) item.docType = sel.value;
+      });
+    });
+  }
+
+  function updateUploadAllButton() {
+    var btn = document.getElementById('addDocumentsUploadBtn');
+    btn.textContent = 'Upload All (' + addDocsQueue.length + ')';
+    btn.disabled = addDocsQueue.length === 0;
+  }
+
+  function handleAddDocumentsUpload() {
+    if (!addDocsQueue.length) return;
+    var btn = document.getElementById('addDocumentsUploadBtn');
+    btn.disabled = true;
+    btn.textContent = 'Uploading…';
+
+    var clientId = session.user.id;
+    var queueSnapshot = addDocsQueue.slice();
+
+    var uploads = queueSnapshot.map(function (q) {
+      q.status = 'uploading';
+      q.error = null;
+      var path = clientId + '/' + q.category + '/' + q.docType + '/' + Date.now() + '-' + q.file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      return supabaseClient.storage.from(DOCUMENTS_BUCKET).upload(path, q.file, { upsert: false })
+        .then(function (uploadResult) {
+          if (uploadResult.error) throw uploadResult.error;
+          return supabaseClient.from('documents').insert({
+            client_id: clientId, document_type: q.docType, category: q.category,
+            file_path: path, file_name: q.file.name, file_size: q.file.size, mime_type: q.file.type,
+            uploaded_at: new Date().toISOString(), status: 'pending'
+          });
+        })
+        .then(function (insertResult) {
+          if (insertResult.error) throw insertResult.error;
+          q.status = 'done';
+        })
+        .catch(function (err) {
+          q.status = 'error';
+          q.error = (err && err.message) || 'Upload failed.';
+        });
+    });
+
+    Promise.all(uploads).then(function () {
+      var failed = queueSnapshot.filter(function (q) { return q.status === 'error'; });
+      addDocsQueue = failed;
+
+      (window.CALESTIA_DOCUMENT_CATEGORIES || []).forEach(function (cat) { renderCategoryQueue(cat.key); });
+      updateUploadAllButton();
+      btn.textContent = 'Upload All (' + addDocsQueue.length + ')';
+
+      var succeededCount = queueSnapshot.length - failed.length;
+      if (failed.length) {
+        showToast(succeededCount + ' file(s) uploaded, ' + failed.length + ' failed — retry below.', true);
+      } else {
+        showToast('All documents uploaded.');
+        closeModal('addDocumentsModal');
+      }
+      if (succeededCount) loadDocuments();
+    });
   }
 
   /* ==================================================================
