@@ -310,6 +310,8 @@ html.ps-html, body.ps-body {
 .ps-btn-outline:hover { background: var(--sky-lt); }
 .ps-btn-danger { background: #fef2f2; color: #b91c1c; border: 1.5px solid #fee2e2; }
 .ps-btn-danger:hover { background: #fee2e2; }
+.ps-btn-success { background: #ecfdf5; color: #047857; border: 1.5px solid #d1fae5; }
+.ps-btn-success:hover { background: #d1fae5; }
 .ps-btn-sm { padding: 7px 13px; font-size: 0.78rem; }
 .ps-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 

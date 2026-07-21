@@ -15,7 +15,7 @@
 
   var PAGE_META = {
     dashboard: ['Dashboard', "Employee Dashboard · Calestia Travel & Tours"],
-    payments: ['Review Payments', 'Verify or reject client payment submissions'],
+    payments: ['Payments', 'Review and verify client payment submissions'],
     clients: ['Clients', 'Manage and review your assigned clients'],
     applications: ['Applications', 'Review and update visa application statuses'],
     documents: ['Documents', 'Verify, reject, or request re-uploads'],
@@ -29,21 +29,26 @@
     PS.gate('employee', onReady);
   });
 
+  var PANEL_LOADERS = {
+    payments: PS.loadPaymentsQueue,
+    clients: loadClients,
+    applications: loadApplications,
+    documents: loadDocumentQueue,
+    remarks: loadRemarks,
+    notifications: loadNotifications,
+    notes: loadNotes,
+    settings: loadSettings
+  };
+
   function onReady(profile) {
     supabaseClient = PS.client();
 
     PS.injectSharedModals();
     PS.wireClientDetailModal(refreshAllData);
-    PS.wireShell(PAGE_META, {
-      payments: PS.loadPaymentsQueue,
-      clients: loadClients,
-      applications: loadApplications,
-      documents: loadDocumentQueue,
-      remarks: loadRemarks,
-      notifications: loadNotifications,
-      notes: loadNotes,
-      settings: loadSettings
-    });
+    PS.wireShell(PAGE_META, PANEL_LOADERS);
+
+    var pendingCard = document.getElementById('statPendingVerificationsCard');
+    if (pendingCard) pendingCard.addEventListener('click', function () { PS.goToPendingPayments(PAGE_META, PANEL_LOADERS); });
 
     document.getElementById('psBannerName').textContent = (profile.full_name || profile.email || '').split(' ')[0];
 
@@ -122,6 +127,8 @@
       if (pendingCount > 0) { docBadge.textContent = String(pendingCount); docBadge.classList.remove('is-hidden'); }
       else docBadge.classList.add('is-hidden');
     }).catch(function () {});
+
+    PS.refreshPaymentsBadge().then(function (count) { setText('statPendingVerifications', count); });
   }
 
   function setText(id, value) { var el = document.getElementById(id); if (el) el.textContent = value; }

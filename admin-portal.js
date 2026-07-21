@@ -18,7 +18,7 @@
 
   var PAGE_META = {
     dashboard: ['Dashboard', 'Administrator Portal · Calestia Travel & Tours'],
-    payments: ['Review Payments', 'Verify or reject client payment submissions'],
+    payments: ['Payments', 'Review and verify client payment submissions'],
     employees: ['Employees', 'Invite, activate, and manage staff accounts'],
     clients: ['Clients', 'All registered clients'],
     applications: ['Applications', 'Organization-wide visa applications'],
@@ -33,22 +33,27 @@
     PS.gate('admin', onReady);
   });
 
+  var PANEL_LOADERS = {
+    payments: PS.loadPaymentsQueue,
+    employees: loadEmployees,
+    clients: loadClients,
+    applications: loadApplications,
+    documents: loadDocumentsOverview,
+    audit: loadAuditLog,
+    notifications: loadNotifications,
+    reports: loadReports,
+    settings: loadSettings
+  };
+
   function onReady(profile) {
     supabaseClient = PS.client();
 
     PS.injectSharedModals();
     PS.wireClientDetailModal(refreshAllData);
-    PS.wireShell(PAGE_META, {
-      payments: PS.loadPaymentsQueue,
-      employees: loadEmployees,
-      clients: loadClients,
-      applications: loadApplications,
-      documents: loadDocumentsOverview,
-      audit: loadAuditLog,
-      notifications: loadNotifications,
-      reports: loadReports,
-      settings: loadSettings
-    });
+    PS.wireShell(PAGE_META, PANEL_LOADERS);
+
+    var pendingCard = document.getElementById('statPendingVerificationsCard');
+    if (pendingCard) pendingCard.addEventListener('click', function () { PS.goToPendingPayments(PAGE_META, PANEL_LOADERS); });
 
     wireInviteModal();
     wireEmployeeTabs();
@@ -125,6 +130,8 @@
 
       renderRecentAudit(recentAudit);
     }).catch(function () {});
+
+    PS.refreshPaymentsBadge().then(function (count) { setText('statPendingVerifications', count); });
 
     loadStaffActivity();
   }

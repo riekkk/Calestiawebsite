@@ -23,6 +23,7 @@ window.PSStaff = (function () {
   var activeClientId = null;
   var lastKnownApplicationUpdatedAt = null;
   var pendingDocAction = null;
+  var activeClientApplicants = []; // cached so the Payment Submissions section can show a per-batch summary without a second query
 
   function client() { return supabaseClient; }
 
@@ -317,8 +318,18 @@ window.PSStaff = (function () {
       if (select && app) select.value = app.status;
     });
     refreshClientDocuments(clientId);
-    refreshClientVisaApplicants(clientId);
-    refreshClientPayments(clientId);
+
+    // Applicants are fetched once and cached (activeClientApplicants) so the
+    // Payment Submissions section below can show each payment's own
+    // application-batch summary (visa type, tier breakdown, applicant
+    // count) without a second round-trip.
+    supabaseClient.from('visa_applicants').select('*').eq('client_id', clientId).order('created_at', { ascending: true })
+      .then(function (result) {
+        activeClientApplicants = result.data || [];
+        renderClientVisaApplicants(activeClientApplicants);
+        refreshClientPayments(clientId);
+      });
+
     refreshClientRemarks(clientId);
     refreshInternalNotes(clientId);
   }
@@ -422,7 +433,7 @@ window.PSStaff = (function () {
     if (action === 'verify') { updatePaymentStatus(clientId, paymentId, 'verified', null, onChanged); return; }
 
     pendingDocAction = { kind: 'payment', clientId: clientId, paymentId: paymentId, action: action, onChanged: onChanged };
-    document.getElementById('docActionTitle').textContent = 'Reject payment submission';
+    document.getElementById('docActionTitle').textContent = 'Reject Payment';
     document.getElementById('docActionRemark').value = '';
     var modal = document.getElementById('docActionModal');
     modal.classList.add('is-open');
@@ -469,11 +480,6 @@ window.PSStaff = (function () {
       .catch(function () { toast('Something went wrong.', true); });
   }
 
-  function refreshClientVisaApplicants(clientId) {
-    supabaseClient.from('visa_applicants').select('*').eq('client_id', clientId).order('created_at', { ascending: true })
-      .then(function (result) { renderClientVisaApplicants(result.data || []); });
-  }
-
   function tierBadgeHTML(tier) {
     var isPremium = tier === 'premium';
     return '<span class="ps-badge" style="margin-left:8px;' + (isPremium ? 'background:#FEF3C7;color:#D97706;' : 'background:#EAF0F6;color:#3B5583;') + '">' + (isPremium ? 'Premium' : 'Standard') + '</span>';
@@ -500,47 +506,113 @@ window.PSStaff = (function () {
       .then(function (result) { renderClientPayments(clientId, result.data || []); });
   }
 
+  function batchSummaryHTML(batchId) {
+    var applicants = activeClientApplicants.filter(function (a) { return a.application_batch_id === batchId; });
+    if (!applicants.length) return '<p class="ps-hint">No applicant details on file for this batch.</p>';
+    var visaType = applicants[0].visa_type || '—';
+    var counts = {};
+    applicants.forEach(function (a) { var t = a.service_tier || 'standard'; counts[t] = (counts[t] || 0) + 1; });
+    var tierParts = Object.keys(counts).map(function (t) { return counts[t] + ' × ' + (t === 'premium' ? 'Premium' : 'Standard'); });
+    return '<p class="ps-hint">' + escapeHTML(visaType) + ' · ' + applicants.length + ' applicant(s) · ' + tierParts.join(', ') + '</p>';
+  }
+
+  function paymentDetailCardHTML(p) {
+    var badgeColor = PAYMENT_STATUS_BADGE[p.status] || 'gray';
+    var badgeLabel = PAYMENT_STATUS_LABEL[p.status] || p.status;
+    var canAct = p.status === 'pending_verification';
+
+    var actions = '<div class="ps-doc-actions">' +
+      '<button type="button" class="ps-btn ps-btn-outline ps-btn-sm" data-payment-action="preview" data-payment-id="' + p.id + '">Preview Receipt</button>' +
+      (canAct
+        ? '<button type="button" class="ps-btn ps-btn-success ps-btn-sm" data-payment-action="verify" data-payment-id="' + p.id + '">Verify Payment</button>' +
+          '<button type="button" class="ps-btn ps-btn-danger ps-btn-sm" data-payment-action="reject" data-payment-id="' + p.id + '">Reject Payment</button>'
+        : '') +
+      '</div>';
+
+    return '<div class="ps-doc-card">' +
+      '<div class="ps-doc-card-top"><div><h4>' + escapeHTML((p.method || '').toUpperCase()) + ' · ₱' + Number(p.amount || 0).toLocaleString() + '</h4>' +
+      '<p>Submitted ' + timeAgo(p.submitted_at) + '</p></div>' +
+      '<span class="ps-badge ps-badge-' + badgeColor + '">' + escapeHTML(badgeLabel) + '</span></div>' +
+      batchSummaryHTML(p.application_batch_id) +
+      (p.reference_note ? '<p class="ps-hint">Reference: ' + escapeHTML(p.reference_note) + '</p>' : '') +
+      (p.remarks ? '<div class="ps-doc-remark is-negative">' + window.PSIcon('message-square', 13) + '<span>' + escapeHTML(p.remarks) + '</span></div>' : '') +
+      '<div class="is-hidden" data-payment-receipt="' + p.id + '"></div>' +
+      '<div style="margin-top:10px;">' +
+      '<label style="display:block;font-size:0.7rem;font-weight:700;color:var(--ps-text-dim);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">Staff Note (internal only)</label>' +
+      '<textarea data-payment-note="' + p.id + '" rows="2" style="width:100%;border:1.5px solid var(--ps-border);border-radius:10px;padding:8px 10px;font-family:inherit;font-size:0.82rem;color:var(--navy-dk);" placeholder="Not shown to the client…">' + escapeHTML(p.staff_note || '') + '</textarea>' +
+      '<button type="button" class="ps-btn ps-btn-outline ps-btn-sm" style="margin-top:6px;" data-payment-action="save-note" data-payment-id="' + p.id + '">Save Note</button>' +
+      '</div>' +
+      '<div class="ps-doc-remark is-negative is-hidden" data-payment-error="' + p.id + '"></div>' +
+      actions +
+      '</div>';
+  }
+
   function renderClientPayments(clientId, rows) {
     var container = document.getElementById('clientDetailPayments');
     if (!rows.length) { container.innerHTML = '<p class="ps-hint">No payment submissions yet.</p>'; return; }
 
-    container.innerHTML = rows.map(function (p) {
-      var badgeColor = PAYMENT_STATUS_BADGE[p.status] || 'gray';
-      var badgeLabel = PAYMENT_STATUS_LABEL[p.status] || p.status;
-      var actions = '<div class="ps-doc-actions">' +
-        '<button type="button" class="ps-btn ps-btn-outline ps-btn-sm" data-payment-action="preview" data-payment-id="' + p.id + '">Preview Receipt</button>' +
-        (p.status === 'pending_verification'
-          ? '<button type="button" class="ps-btn ps-btn-primary ps-btn-sm" data-payment-action="verify" data-payment-id="' + p.id + '">Verify</button>' +
-            '<button type="button" class="ps-btn ps-btn-danger ps-btn-sm" data-payment-action="reject" data-payment-id="' + p.id + '">Reject</button>'
-          : '') +
-        '</div>';
-
-      return '<div class="ps-doc-card">' +
-        '<div class="ps-doc-card-top"><div><h4>' + escapeHTML((p.method || '').toUpperCase()) + ' · ₱' + Number(p.amount || 0).toLocaleString() + '</h4>' +
-        '<p>' + p.applicant_count + ' applicant(s) · Submitted ' + timeAgo(p.submitted_at) + '</p></div>' +
-        '<span class="ps-badge ps-badge-' + badgeColor + '">' + escapeHTML(badgeLabel) + '</span></div>' +
-        (p.remarks ? '<div class="ps-doc-remark is-negative">' + window.PSIcon('message-square', 13) + '<span>' + escapeHTML(p.remarks) + '</span></div>' : '') +
-        actions +
-        '</div>';
-    }).join('');
+    container.innerHTML = rows.map(paymentDetailCardHTML).join('');
 
     container.querySelectorAll('[data-payment-action]').forEach(function (btn) {
       var paymentId = btn.getAttribute('data-payment-id');
       var action = btn.getAttribute('data-payment-action');
       btn.addEventListener('click', function () {
-        if (action === 'preview') { previewPaymentReceipt(paymentId, rows); return; }
+        if (action === 'preview') { togglePaymentReceiptPreview(paymentId, rows); return; }
+        if (action === 'save-note') { saveClientPaymentNote(clientId, paymentId); return; }
         handlePaymentAction(clientId, paymentId, action, function () { if (activeClientId === clientId) refreshClientPayments(clientId); });
       });
     });
   }
 
-  function previewPaymentReceipt(paymentId, rows) {
+  function togglePaymentReceiptPreview(paymentId, rows) {
+    var slot = document.querySelector('[data-payment-receipt="' + paymentId + '"]');
+    if (!slot) return;
+    if (!slot.classList.contains('is-hidden')) { slot.classList.add('is-hidden'); slot.innerHTML = ''; return; }
+
     var row = rows.filter(function (r) { return r.id === paymentId; })[0];
     var path = row && row.receipt_path;
     if (!path) { toast('No receipt on file.', true); return; }
-    supabaseClient.storage.from('payment-receipts').createSignedUrl(path, 300)
-      .then(function (signed) { if (signed && signed.data && signed.data.signedUrl) window.open(signed.data.signedUrl, '_blank', 'noopener'); })
-      .catch(function () { toast('Could not open receipt.', true); });
+
+    slot.classList.remove('is-hidden');
+    slot.innerHTML = '<p class="ps-hint">Loading receipt…</p>';
+
+    supabaseClient.storage.from('payment-receipts').createSignedUrl(path, 600)
+      .then(function (signed) {
+        var url = signed && signed.data && signed.data.signedUrl;
+        if (!url) { slot.innerHTML = '<p class="ps-hint">Could not load receipt.</p>'; return; }
+        var isPdf = /\.pdf($|\?)/i.test(row.receipt_file_name || path);
+        if (isPdf) {
+          slot.innerHTML = '<embed src="' + url + '" type="application/pdf" style="width:100%;height:360px;border-radius:12px;border:1px solid var(--ps-border);margin-top:8px;" />' +
+            '<a href="' + url + '" target="_blank" rel="noopener noreferrer" class="ps-hint" style="display:block;margin-top:6px;">Open in new tab ↗</a>';
+        } else {
+          slot.innerHTML = '<img src="' + url + '" alt="Payment receipt" style="max-width:100%;max-height:360px;border-radius:12px;border:1px solid var(--ps-border);display:block;margin-top:8px;" />';
+        }
+      })
+      .catch(function () { slot.innerHTML = '<p class="ps-hint">Could not load receipt.</p>'; });
+  }
+
+  function saveClientPaymentNote(clientId, paymentId) {
+    var textarea = document.querySelector('[data-payment-note="' + paymentId + '"]');
+    if (!textarea) return;
+    var note = textarea.value.trim();
+    supabaseClient.from('payment_submissions').update({ staff_note: note || null }).eq('id', paymentId).eq('client_id', clientId)
+      .then(function (result) {
+        if (result.error) { showPaymentInlineError(paymentId, result.error.message || 'Could not save note.'); return; }
+        hidePaymentInlineError(paymentId);
+        toast('Note saved.');
+      })
+      .catch(function () { showPaymentInlineError(paymentId, 'Something went wrong. Please try again.'); });
+  }
+
+  function showPaymentInlineError(paymentId, message) {
+    var el = document.querySelector('[data-payment-error="' + paymentId + '"]');
+    if (!el) return;
+    el.textContent = message;
+    el.classList.remove('is-hidden');
+  }
+  function hidePaymentInlineError(paymentId) {
+    var el = document.querySelector('[data-payment-error="' + paymentId + '"]');
+    if (el) el.classList.add('is-hidden');
   }
 
   function updatePaymentStatus(clientId, paymentId, status, remark, onChanged) {
@@ -550,12 +622,20 @@ window.PSStaff = (function () {
 
     supabaseClient.from('payment_submissions').update(payload).eq('id', paymentId).eq('client_id', clientId)
       .then(function (result) {
-        if (result.error) { toast(result.error.message || 'Could not update payment.', true); return; }
-        toast('Payment submission updated.');
+        if (result.error) {
+          var msg = result.error.message || 'Could not update payment.';
+          toast(msg, true);
+          showPaymentInlineError(paymentId, msg);
+          return;
+        }
+        toast(status === 'verified' ? 'Payment verified.' : 'Payment rejected.');
         if (activeClientId === clientId) refreshClientPayments(clientId);
         if (onChanged) onChanged();
       })
-      .catch(function () { toast('Something went wrong.', true); });
+      .catch(function () {
+        toast('Something went wrong.', true);
+        showPaymentInlineError(paymentId, 'Something went wrong. Please try again.');
+      });
   }
 
   function refreshClientRemarks(clientId) {
@@ -803,7 +883,7 @@ window.PSStaff = (function () {
       '</div>' +
       '<div class="ps-pay-row-line"><span>' + escapeHTML(visaType || '—') + '</span><span>' + applicantCount + ' applicant(s)</span></div>' +
       '<div class="ps-pay-row-line"><span class="ps-pay-amount">₱' + Number(p.amount || 0).toLocaleString() + '</span><span>' + escapeHTML(methodLabel || '') + '</span><span>' + timeAgo(p.submitted_at) + '</span></div>' +
-      '<button type="button" class="ps-btn ps-btn-primary ps-btn-sm" data-review-payment="' + p.client_id + '">Review</button>' +
+      '<button type="button" class="ps-btn ps-btn-outline ps-btn-sm" data-review-payment="' + p.client_id + '">Review</button>' +
       '</div>';
   }
 
@@ -830,6 +910,15 @@ window.PSStaff = (function () {
     paymentsBadgePollId = window.setInterval(refreshPaymentsBadge, 60000);
   }
 
+  // Used by the "Pending Verifications" dashboard stat card so clicking it
+  // always lands on the Pending tab, regardless of whatever filter was
+  // last selected on the Payments page.
+  function goToPendingPayments(pageMeta, panelLoaders) {
+    paymentsActiveFilter = 'pending_verification';
+    goToPanel('payments', pageMeta, panelLoaders);
+    loadPaymentsQueue();
+  }
+
   return {
     client: client,
     gate: gate,
@@ -853,6 +942,7 @@ window.PSStaff = (function () {
     wireSettingsPanel: wireSettingsPanel,
     subscribeRealtime: subscribeRealtime,
     loadPaymentsQueue: loadPaymentsQueue,
+    goToPendingPayments: goToPendingPayments,
     refreshPaymentsBadge: refreshPaymentsBadge,
     startPaymentsBadgePolling: startPaymentsBadgePolling,
     DOC_STATUS_BADGE: DOC_STATUS_BADGE,
