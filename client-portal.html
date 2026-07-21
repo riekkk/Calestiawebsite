@@ -28,6 +28,9 @@
         <button type="button" class="ps-sidebar-close" id="psSidebarClose" aria-label="Close menu">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
         </button>
+        <button type="button" class="ps-sidebar-rail-toggle" id="psSidebarRailToggle" aria-label="Expand sidebar">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
         <div class="ps-sidebar-brand">
           <img src="assets/images/calestia-logo.png" alt="" />
           <span>Calestia</span>
@@ -113,70 +116,64 @@
 
         <!-- ==================== DASHBOARD ==================== -->
         <section class="ps-panel is-active" data-panel="dashboard">
-          <div class="ps-banner">
-            <div>
-              <h2>Welcome back, <span id="psBannerName">traveler</span></h2>
-              <p id="psBannerSub">Japan Tourist Visa</p>
-            </div>
-            <div class="ps-banner-chip">
-              <strong id="psBannerStatus">—</strong>
-              <span>Current status</span>
+          <div class="ps-hero">
+            <p class="ps-hero-date" id="psHeroDate">—</p>
+            <h1 class="ps-hero-title" id="psHeroTitle">Welcome Back! 👋</h1>
+            <p class="ps-hero-sub">Ready for your next adventure?</p>
+            <div class="ps-hero-icon">
+              <svg width="96" height="96" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z"/></svg>
             </div>
           </div>
 
-          <div class="ps-grid ps-grid-4" style="margin-bottom:20px;">
-            <div class="ps-stat">
-              <div class="ps-stat-top"><div class="ps-stat-icon" style="background:#eff6ff;color:#1d4ed8;">
-                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5z"/><path d="M14 2v6h6"/></svg>
-              </div></div>
-              <p class="ps-stat-value" id="statDocsSubmitted">—</p>
-              <p class="ps-stat-label">Documents Submitted</p>
-            </div>
-            <div class="ps-stat">
-              <div class="ps-stat-top"><div class="ps-stat-icon" style="background:#f5f3ff;color:#6d28d9;">
-                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-              </div></div>
-              <p class="ps-stat-value" id="statDaysInProcess">—</p>
-              <p class="ps-stat-label">Days in Process</p>
-            </div>
-            <div class="ps-stat">
-              <div class="ps-stat-top"><div class="ps-stat-icon" style="background:#fffbeb;color:#b45309;">
-                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v5M12 16h.01"/></svg>
-              </div></div>
-              <p class="ps-stat-value" id="statPendingActions">—</p>
-              <p class="ps-stat-label">Pending Actions</p>
-            </div>
-            <div class="ps-stat">
-              <div class="ps-stat-top"><div class="ps-stat-icon" style="background:#ecfdf5;color:#059669;">
-                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg>
-              </div></div>
-              <p class="ps-stat-value" id="statUnreadNotifs">—</p>
-              <p class="ps-stat-label">Unread Notifications</p>
-            </div>
-          </div>
-
-          <div class="ps-grid" style="grid-template-columns: 2fr 1fr;">
-            <div class="ps-card ps-card-pad">
-              <h3 style="font-size:1rem;font-weight:700;color:var(--navy-dk);margin-bottom:16px;">Application Progress</h3>
-              <div class="ps-timeline" id="psTimeline">
-                <p class="ps-hint">Loading your application status…</p>
-              </div>
-            </div>
-            <div style="display:flex;flex-direction:column;gap:16px;">
-              <div class="ps-card ps-card-pad">
-                <h3 style="font-size:0.95rem;font-weight:700;color:var(--navy-dk);margin-bottom:12px;">Quick Actions</h3>
-                <div style="display:flex;flex-direction:column;gap:8px;">
-                  <button type="button" class="ps-btn ps-btn-outline" style="width:100%;justify-content:flex-start;" data-goto-panel="visa" id="dashApplyVisaBtn">Apply Visa</button>
-                  <button type="button" class="ps-btn ps-btn-outline" style="width:100%;justify-content:flex-start;" data-goto-panel="documents">Upload Document</button>
-                  <button type="button" class="ps-btn ps-btn-outline" style="width:100%;justify-content:flex-start;" data-goto-panel="forms">Download Forms</button>
-                  <a href="index.html#contact" class="ps-btn ps-btn-outline" style="width:100%;justify-content:flex-start;">Contact Support</a>
-                  <a href="tour-packages.html" target="_blank" rel="noopener noreferrer" class="ps-btn ps-btn-outline" style="width:100%;justify-content:flex-start;">Book a Tour</a>
+          <div class="ps-dash-features">
+            <div class="ps-feature-card">
+              <div class="ps-feature-card-head">
+                <div class="ps-feature-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M8 12h8M8 15h5"/><circle cx="7" cy="9.5" r="1.5"/></svg>
+                </div>
+                <div class="ps-feature-title-wrap">
+                  <h3>Visa Assistance</h3>
+                  <span class="ps-badge ps-badge-amber is-hidden" id="psVisaActiveBadge">0 Active</span>
                 </div>
               </div>
-              <div class="ps-card ps-card-pad">
-                <h3 style="font-size:0.95rem;font-weight:700;color:var(--navy-dk);margin-bottom:12px;">Recent Activity</h3>
-                <div id="psRecentActivity"><p class="ps-hint">Loading…</p></div>
+              <p class="ps-feature-desc">Apply and monitor your visa applications with real-time status tracking.</p>
+              <div class="ps-timeline" id="psDashTimeline"><p class="ps-hint">Loading…</p></div>
+              <div class="ps-feature-actions">
+                <button type="button" class="ps-btn ps-btn-primary" id="dashApplyVisaBtn">Apply Visa</button>
+                <button type="button" class="ps-btn ps-btn-outline" data-goto-panel="visa">View Applications</button>
               </div>
+            </div>
+
+            <div class="ps-feature-card">
+              <div class="ps-feature-card-head">
+                <div class="ps-feature-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                </div>
+                <div class="ps-feature-title-wrap">
+                  <h3>Tour Packages</h3>
+                  <span class="ps-badge ps-badge-green">1 Upcoming</span>
+                </div>
+              </div>
+              <p class="ps-feature-desc">Discover local and international travel packages curated by Calestia.</p>
+              <div class="ps-destination-grid" id="psDestinationGrid"></div>
+              <div class="ps-feature-actions">
+                <a href="tour-packages.html" target="_blank" rel="noopener noreferrer" class="ps-btn ps-btn-primary">Browse Tours</a>
+                <a href="tour-packages.html" target="_blank" rel="noopener noreferrer" class="ps-btn ps-btn-outline">My Bookings</a>
+              </div>
+            </div>
+          </div>
+
+          <div class="ps-dash-bottom">
+            <div class="ps-card ps-card-pad">
+              <h3 style="font-size:0.95rem;font-weight:700;color:var(--navy-dk);margin-bottom:8px;">Quick Actions</h3>
+              <div id="psQuickActionsList"></div>
+            </div>
+            <div class="ps-card ps-card-pad">
+              <div class="ps-card-head-row">
+                <h3>Recent Activity</h3>
+                <button type="button" class="ps-link-btn" data-goto-panel="notifications">View All</button>
+              </div>
+              <div id="psRecentActivity" style="margin-top:8px;"><p class="ps-hint">Loading…</p></div>
             </div>
           </div>
         </section>
@@ -186,7 +183,7 @@
           <div class="ps-section-head">
             <div>
               <h2>Visa Assistance</h2>
-              <p>Apply for a visa, manage applicants, monitor your application progress, and submit your payment.</p>
+              <p>Apply for a visa, manage applicants, monitor your application progress, and securely complete your payment.</p>
             </div>
             <button type="button" class="ps-btn ps-btn-primary ps-btn-sm" id="psApplyVisaBtn">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -194,20 +191,20 @@
             </button>
           </div>
 
-          <div class="ps-card ps-card-pad" style="margin-bottom:20px;">
-            <h3 style="font-size:1rem;font-weight:700;color:var(--navy-dk);margin-bottom:16px;">Application Progress</h3>
-            <div class="ps-timeline" id="psVisaTimeline">
-              <p class="ps-hint">Loading your application status…</p>
-            </div>
+          <div id="psApplicationGroupsList" style="display:flex;flex-direction:column;gap:16px;margin-bottom:8px;">
+            <p class="ps-hint">Loading your applications…</p>
           </div>
 
-          <div class="ps-card">
-            <div class="ps-card-head">
-              <h3>Applicants</h3>
+          <div class="ps-empty-invite">
+            <div class="ps-empty-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M8 12h8M8 15h5"/><circle cx="7" cy="9.5" r="1.5"/></svg>
             </div>
-            <div id="psApplicantsList" style="padding:20px;display:flex;flex-direction:column;gap:12px;">
-              <p class="ps-hint">Loading applicants…</p>
-            </div>
+            <h3>Start a New Application</h3>
+            <p>Our visa specialists will guide you through every step of the process.</p>
+            <button type="button" class="ps-btn ps-btn-primary" id="psApplyVisaBtn2">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Apply a Visa
+            </button>
           </div>
         </section>
 
@@ -380,6 +377,31 @@
         <button type="button" class="auth-close" data-close-modal="applyVisaModal" aria-label="Close">✕</button>
       </div>
       <div class="ps-modal-body" id="avModalBody"></div>
+    </div>
+  </div>
+
+  <!-- ==================== CONTACT SUPPORT MODAL ==================== -->
+  <div class="ps-modal" id="contactModal" aria-hidden="true">
+    <div class="ps-modal-backdrop" data-close-modal="contactModal"></div>
+    <div class="ps-modal-card" role="dialog" aria-modal="true" aria-labelledby="contactModalTitle">
+      <div class="ps-modal-head">
+        <div>
+          <h2 id="contactModalTitle">Contact Support</h2>
+          <p>We typically reply within a few hours.</p>
+        </div>
+        <button type="button" class="auth-close" data-close-modal="contactModal" aria-label="Close">✕</button>
+      </div>
+      <div class="ps-modal-body">
+        <div id="psContactList" style="display:flex;flex-direction:column;gap:10px;margin-bottom:18px;"></div>
+        <div class="form-group">
+          <label>Send us a message</label>
+          <textarea id="contactMessage" rows="4" placeholder="How can we help?"></textarea>
+        </div>
+        <button type="button" class="ps-btn ps-btn-primary" id="contactSendBtn" style="width:100%;justify-content:center;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+          Send Message
+        </button>
+      </div>
     </div>
   </div>
 

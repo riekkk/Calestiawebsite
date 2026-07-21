@@ -53,7 +53,8 @@ window.PS_ICON_PATHS = {
   'arrow-left': '<path d="M19 12H5"/><path d="m12 19-7-7 7-7"/>',
   filter: '<path d="M22 3H2l8 9.5V19l4 2v-8.5Z"/>',
   'more-horizontal': '<circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/><circle cx="5" cy="12" r="1.5"/>',
-  'trending-up': '<path d="m22 7-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/>'
+  'trending-up': '<path d="m22 7-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/>',
+  'credit-card': '<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>'
 };
 
 /**

@@ -18,6 +18,7 @@
 
   var PAGE_META = {
     dashboard: ['Dashboard', 'Administrator Portal · Calestia Travel & Tours'],
+    payments: ['Review Payments', 'Verify or reject client payment submissions'],
     employees: ['Employees', 'Invite, activate, and manage staff accounts'],
     clients: ['Clients', 'All registered clients'],
     applications: ['Applications', 'Organization-wide visa applications'],
@@ -38,6 +39,7 @@
     PS.injectSharedModals();
     PS.wireClientDetailModal(refreshAllData);
     PS.wireShell(PAGE_META, {
+      payments: PS.loadPaymentsQueue,
       employees: loadEmployees,
       clients: loadClients,
       applications: loadApplications,
@@ -61,12 +63,14 @@
       onCoreChange: refreshAllData,
       onProfilesChange: function () { PS.loadAllProfiles().then(loadEmployees); }
     });
+    PS.startPaymentsBadgePolling();
   }
 
   function refreshAllData() {
     loadDashboard();
     loadClients();
     var active = document.querySelector('.ps-panel.is-active').getAttribute('data-panel');
+    if (active === 'payments') PS.loadPaymentsQueue();
     if (active === 'applications') loadApplications();
     if (active === 'documents') loadDocumentsOverview();
     if (active === 'audit') loadAuditLog();

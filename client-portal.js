@@ -39,9 +39,21 @@
     profile: ['My Profile', 'Manage your personal information']
   };
 
-  /* Apply-a-Visa modal state */
-  var AV_EMPTY_APPLICANT = { first_name: '', last_name: '', gender: '', date_of_birth: '', nationality: '', passport_number: '', passport_expiry: '', travel_date: '', visa_type: '', service_tier: 'standard' };
+  /* Client-wide cached data. masterApplication is the one staff-tracked
+     status row per client (unchanged — the schema has no per-batch version
+     of that pipeline; see renderDashTimeline). avApplicants /
+     allPaymentSubmissions hold EVERY batch, grouped for display by
+     computeApplicationGroups(). */
+  var masterApplication = null;
   var avApplicants = [];
+  var allPaymentSubmissions = [];
+
+  /* Apply-a-Visa modal state. avCurrentBatchId scopes the modal session to
+     ONE application group ("batch") at a time — a client can have several
+     concurrent applications, each identified by
+     visa_applicants.application_batch_id. */
+  var AV_EMPTY_APPLICANT = { first_name: '', last_name: '', gender: '', date_of_birth: '', nationality: '', passport_number: '', passport_expiry: '', travel_date: '', visa_type: '', service_tier: 'standard' };
+  var avCurrentBatchId = null;
   var avStep = 'form';
   var avEditingId = null;
   var avFormData = null;
@@ -49,8 +61,8 @@
   var avReceiptFile = null;
   var avLastSubmission = null;
 
-  /* My Documents access gating — resolved once per portal load, refreshed on
-     relevant realtime changes and via the locked page's "Refresh Status" button. */
+  /* My Documents access gating — unlocked as soon as ANY application group
+     has a staff-verified payment. */
   var documentsAccessState = null;
   var DOCS_LOCK_MESSAGES = {
     no_application: { title: 'Apply for a visa first', desc: "Document uploads unlock once you've submitted a visa application.", cta: 'Apply for a Visa' },
@@ -62,6 +74,8 @@
   /* Modal a11y state (focus trap / return focus), shared by every ps-modal on this page */
   var modalReturnFocusEl = null;
   var modalKeydownHandler = null;
+
+  var pollIntervalId = null;
 
   document.addEventListener('DOMContentLoaded', init);
 
@@ -100,26 +114,31 @@
     document.getElementById('psShell').classList.remove('is-hidden');
 
     var name = profile.full_name || profile.email || 'traveler';
+    var firstName = name.split(' ')[0];
     var initial = name.charAt(0).toUpperCase();
     document.getElementById('psUserName').textContent = name;
     document.getElementById('psUserEmail').textContent = profile.email || '';
     document.getElementById('psUserAvatar').textContent = initial;
-    document.getElementById('psBannerName').textContent = name.split(' ')[0];
     document.getElementById('psProfileAvatar').textContent = initial;
     document.getElementById('psProfileName').textContent = name;
+    document.getElementById('psHeroDate').textContent = new Date().toLocaleDateString('en-PH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    document.getElementById('psHeroTitle').textContent = 'Welcome Back, ' + firstName + '! 👋';
 
-    loadDashboard();
-    loadVisaPanel();
+    renderDestinationTiles();
+    renderQuickActions();
+
+    loadClientCoreData().then(renderDashboardAndVisaPages);
     loadDocumentsAccessState();
     loadForms();
     loadNotifications();
     loadReviews();
     loadProfile();
     subscribeRealtime();
+    startPollingSync();
   }
 
   /* ==================================================================
-     Shell: nav switching, mobile drawer, bell, sign out
+     Shell: nav switching, mobile drawer, tablet rail, bell, sign out
      ================================================================== */
   function wireShell() {
     // Only nav items with a data-panel are in-portal tabs. "Tour Packages"
@@ -141,6 +160,9 @@
     if (menuBtn) menuBtn.addEventListener('click', function () { shell.classList.add('ps-sidebar-open'); });
     if (closeBtn) closeBtn.addEventListener('click', function () { shell.classList.remove('ps-sidebar-open'); });
     if (backdrop) backdrop.addEventListener('click', function () { shell.classList.remove('ps-sidebar-open'); });
+
+    var railToggle = document.getElementById('psSidebarRailToggle');
+    if (railToggle) railToggle.addEventListener('click', function () { shell.classList.toggle('ps-sidebar-expanded'); });
 
     var bellBtn = document.getElementById('psBellBtn');
     var bellPanel = document.getElementById('psBellPanel');
@@ -226,8 +248,12 @@
     window.addEventListener('ps:modal-closed:uploadModal', resetUploadModal);
 
     document.getElementById('psApplyVisaBtn').addEventListener('click', function () { openApplyVisaModal(); });
+    var applyVisaBtn2 = document.getElementById('psApplyVisaBtn2');
+    if (applyVisaBtn2) applyVisaBtn2.addEventListener('click', function () { openApplyVisaModal(); });
     document.getElementById('dashApplyVisaBtn').addEventListener('click', function () { openApplyVisaModal(); });
     window.addEventListener('ps:modal-closed:applyVisaModal', resetApplyVisaModal);
+
+    document.getElementById('contactSendBtn').addEventListener('click', handleContactSend);
   }
 
   function openModal(id) {
@@ -265,67 +291,212 @@
   }
 
   /* ==================================================================
+     Client core data — the master (staff-tracked) application row, every
+     visa applicant, and every payment submission across all of a client's
+     application batches. Single fetch point reused by the Dashboard, the
+     Visa Assistance page, the Apply-a-Visa modal, and the C1 polling sync.
+     ================================================================== */
+  function loadClientCoreData() {
+    return Promise.all([
+      supabaseClient.from('applications').select('*').eq('client_id', session.user.id).maybeSingle(),
+      supabaseClient.from('visa_applicants').select('*').eq('client_id', session.user.id).order('created_at', { ascending: true }),
+      supabaseClient.from('payment_submissions').select('*').eq('client_id', session.user.id).order('submitted_at', { ascending: false })
+    ]).then(function (results) {
+      masterApplication = results[0].data || null;
+      avApplicants = results[1].error ? [] : (results[1].data || []);
+      allPaymentSubmissions = results[2].error ? [] : (results[2].data || []);
+    }).catch(function () {
+      masterApplication = null; avApplicants = []; allPaymentSubmissions = [];
+    });
+  }
+
+  function refreshClientCoreData() {
+    return loadClientCoreData().then(function () {
+      renderDashboardAndVisaPages();
+      return loadDocumentsAccessState();
+    });
+  }
+
+  /* Groups visa_applicants by application_batch_id and pairs each group
+     with its most recent payment_submissions row (also matched by batch),
+     since that's the only per-batch status source the schema has. */
+  function computeApplicationGroups() {
+    var byBatch = {};
+    avApplicants.forEach(function (a) {
+      var key = a.application_batch_id || 'legacy';
+      (byBatch[key] = byBatch[key] || []).push(a);
+    });
+    var groups = Object.keys(byBatch).map(function (batchId) {
+      var applicants = byBatch[batchId].slice().sort(function (a, b) { return new Date(a.created_at) - new Date(b.created_at); });
+      var payments = allPaymentSubmissions.filter(function (p) { return p.application_batch_id === batchId; })
+        .slice().sort(function (a, b) { return new Date(b.submitted_at) - new Date(a.submitted_at); });
+      var latestPayment = payments[0] || null;
+      var status = !latestPayment ? 'waiting_for_payment'
+        : latestPayment.status === 'verified' ? 'completed'
+        : latestPayment.status === 'rejected' ? 'rejected'
+        : 'under_review';
+      return {
+        batchId: batchId,
+        applicants: applicants,
+        latestPayment: latestPayment,
+        status: status,
+        visaType: applicants[0] ? applicants[0].visa_type : '',
+        createdAt: applicants[0] ? applicants[0].created_at : null
+      };
+    });
+    groups.sort(function (a, b) { return new Date(b.createdAt) - new Date(a.createdAt); });
+    return groups;
+  }
+
+  var APP_STATUS_META = {
+    waiting_for_payment: { label: 'Waiting for Payment', badge: 'amber' },
+    under_review: { label: 'Payment Under Review', badge: 'blue' },
+    completed: { label: 'Completed', badge: 'green' },
+    rejected: { label: 'Rejected', badge: 'red' }
+  };
+
+  // Japan-only scope: any Japan visa type gets the JP flag, everything
+  // else (i.e. "Others") gets a generic globe.
+  function flagForVisaType(visaType) {
+    return /^japan/i.test(visaType || '') ? '🇯🇵' : '🌍';
+  }
+
+  function parseVisaTypeDisplay(visaType) {
+    var match = /^(.*?)\s*\(([^)]+)\)\s*$/.exec(visaType || '');
+    if (match) return { heading: match[1].trim(), subtype: match[2].trim() };
+    return { heading: visaType || 'Visa Application', subtype: null };
+  }
+
+  function renderDashboardAndVisaPages() {
+    renderDashTimeline(masterApplication);
+    renderVisaActiveBadge();
+    renderApplicationGroups();
+  }
+
+  /* ==================================================================
      Dashboard
      ================================================================== */
-  function loadDashboard() {
-    supabaseClient.from('applications').select('*').eq('client_id', session.user.id).maybeSingle()
-      .then(function (result) { renderTimeline(result.data || null); })
-      .catch(function () { renderTimeline(null); });
-  }
+  var DASH_TIMELINE_STEPS = ['Application Submitted', 'Documents Under Review', 'Appointment Scheduled', 'Visa Released'];
 
-  function renderTimeline(app) {
-    document.getElementById('psTimeline').innerHTML = buildTimelineHTML(app);
-
-    var statuses = window.CALESTIA_APPLICATION_STATUSES || [];
-    if (!app) {
-      document.getElementById('psBannerStatus').textContent = '—';
-      document.getElementById('statDaysInProcess').textContent = '—';
+  function renderDashTimeline(app) {
+    var el = document.getElementById('psDashTimeline');
+    if (!el) return;
+    if (!computeApplicationGroups().length) {
+      el.innerHTML = '<p class="ps-hint">Apply for a visa to see your progress here.</p>';
       return;
     }
-    document.getElementById('psBannerStatus').textContent = statusLabel(statuses, app.status);
-    var days = app.created_at ? Math.max(0, Math.floor((Date.now() - new Date(app.created_at).getTime()) / 86400000)) : 0;
-    document.getElementById('statDaysInProcess').textContent = String(days);
-  }
 
-  function buildTimelineHTML(app) {
+    // This reflects the client's overall staff-tracked processing status —
+    // "applications" is still one row per client (the schema has no
+    // per-batch version of this 10-step pipeline). Each Visa Assistance
+    // card below shows its OWN payment-driven status instead.
     var statuses = window.CALESTIA_APPLICATION_STATUSES || [];
-    if (!app) return '<p class="ps-hint">Your application will appear here once Calestia sets it up.</p>';
+    var statusKey = app ? app.status : null;
+    var idx = statusKey ? statuses.map(function (s) { return s.key; }).indexOf(statusKey) : -1;
+    var doneIndex = -1;
+    if (idx >= 0) doneIndex = 0;
+    if (idx >= 1) doneIndex = 1; // documents_under_review or later
+    if (idx >= 3) doneIndex = 2; // submitted_to_jvac or later
+    if (statusKey === 'visa_approved' || statusKey === 'passport_ready_for_pickup' || statusKey === 'completed') doneIndex = 3;
 
-    var isDenied = app.status === 'visa_denied';
-    var visible = isDenied
-      ? statuses.filter(function (s) { return s.key !== 'visa_approved' && s.key !== 'passport_ready_for_pickup' && s.key !== 'completed'; })
-      : statuses;
-    var currentIndex = visible.map(function (s) { return s.key; }).indexOf(app.status);
-
-    var html = '<div class="ps-timeline-rail"></div>';
-    visible.forEach(function (s, i) {
-      var isDone = i < currentIndex;
-      var isActive = i === currentIndex;
-      var itemClass = 'ps-timeline-item' + (isDone ? ' is-done' : '') + (isActive ? ' is-active' : '');
-      var dotClass = 'ps-timeline-dot' + (isDone ? ' is-done' : '') + (isActive ? ' is-active' : '');
-      var dotInner = isDone ? window.PSIcon('check-circle', 15) : '<span style="width:8px;height:8px;border-radius:50%;background:' + (isActive ? 'var(--navy)' : '#c7d3e0') + ';"></span>';
-      html += '<div class="' + itemClass + '"><div class="' + dotClass + '">' + dotInner + '</div>' +
-        '<div><p class="ps-tl-label">' + escapeHTML(s.label) + '</p>' +
-        (isDone ? '<p class="ps-tl-sub">Completed</p>' : isActive ? '<p class="ps-tl-sub">' + (isDenied ? 'Denied' : 'In Progress') + '</p>' : '') +
-        '</div></div>';
+    var html = '<div style="display:flex;align-items:flex-start;">';
+    DASH_TIMELINE_STEPS.forEach(function (label, i) {
+      var isDone = i <= doneIndex;
+      var lineColor = (i + 1 <= doneIndex) ? 'var(--navy)' : '#D1DCF0';
+      html += '<div style="flex:1;display:flex;flex-direction:column;align-items:center;position:relative;">';
+      if (i < DASH_TIMELINE_STEPS.length - 1) {
+        html += '<div style="position:absolute;top:16px;left:50%;width:100%;height:2px;background:' + lineColor + ';"></div>';
+      }
+      html += '<div style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;z-index:1;flex-shrink:0;margin-bottom:8px;' +
+        (isDone ? 'background:var(--navy);color:#fff;' : 'background:#EAF0F6;border:2px solid #D1DCF0;') + '">' +
+        (isDone ? window.PSIcon('check-circle', 15) : '<span style="width:8px;height:8px;border-radius:50%;background:#D1DCF0;"></span>') +
+        '</div>' +
+        '<span style="text-align:center;font-size:0.7rem;font-weight:600;line-height:1.3;color:' + (isDone ? 'var(--navy-dk)' : 'var(--ps-text-dim)') + ';">' + escapeHTML(label) + '</span>' +
+        '</div>';
     });
-    return html;
+    html += '</div>';
+    el.innerHTML = html;
   }
 
-  function statusLabel(list, key) {
-    var found = list.filter(function (s) { return s.key === key; })[0];
-    return found ? found.label : key;
+  function renderVisaActiveBadge() {
+    var badge = document.getElementById('psVisaActiveBadge');
+    if (!badge) return;
+    var activeCount = computeApplicationGroups().filter(function (g) { return g.status !== 'completed'; }).length;
+    if (activeCount > 0) {
+      badge.textContent = activeCount + ' Active';
+      badge.classList.remove('is-hidden');
+    } else {
+      badge.classList.add('is-hidden');
+    }
   }
+
+  function renderDestinationTiles() {
+    var el = document.getElementById('psDestinationGrid');
+    if (!el) return;
+    var destinations = window.CALESTIA_DASHBOARD_DESTINATIONS || [];
+    el.innerHTML = destinations.map(function (d) {
+      return '<a href="tour-packages.html" target="_blank" rel="noopener noreferrer" class="ps-destination-tile" aria-label="' + escapeHTML(d.name) + ' — opens Tour Packages in a new tab">' +
+        '<img src="' + escapeHTML(d.image) + '" alt="' + escapeHTML(d.name) + '" loading="lazy" />' +
+        '<div class="ps-destination-tile-overlay"></div>' +
+        '<span class="ps-destination-tile-label">' + escapeHTML(d.name) + '</span>' +
+        '</a>';
+    }).join('');
+  }
+
+  var QUICK_ACTIONS = [
+    { key: 'documents', label: 'Upload Documents', color: 'var(--navy)', bg: 'var(--sky-lt)', icon: 'upload' },
+    { key: 'forms', label: 'Download Forms', color: 'var(--navy-dk)', bg: '#EAF0F6', icon: 'download' },
+    { key: 'tour', label: 'Book a Tour', color: '#0EA5E9', bg: '#E0F2FE', icon: 'map-pin' },
+    { key: 'visa', label: 'Apply Visa', color: '#6366F1', bg: '#EEF2FF', icon: 'edit' },
+    { key: 'contact', label: 'Contact Support', color: '#10B981', bg: '#ECFDF5', icon: 'phone' }
+  ];
+
+  function renderQuickActions() {
+    var el = document.getElementById('psQuickActionsList');
+    if (!el) return;
+    el.innerHTML = QUICK_ACTIONS.map(function (a) {
+      return '<button type="button" class="ps-quick-action-row" data-quick-action="' + a.key + '">' +
+        '<span class="ps-quick-action-icon" style="background:' + a.bg + ';color:' + a.color + ';">' + window.PSIcon(a.icon, 17) + '</span>' +
+        '<span class="ps-qa-label">' + escapeHTML(a.label) + '</span>' +
+        '<svg class="ps-qa-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>' +
+        '</button>';
+    }).join('');
+
+    el.querySelectorAll('[data-quick-action]').forEach(function (btn) {
+      btn.addEventListener('click', function () { handleQuickAction(btn.getAttribute('data-quick-action')); });
+    });
+  }
+
+  function handleQuickAction(key) {
+    if (key === 'documents') { handleNavigateToPanel('documents'); return; }
+    if (key === 'forms') { handleNavigateToPanel('forms'); return; }
+    if (key === 'tour') { window.open('tour-packages.html', '_blank', 'noopener'); return; }
+    if (key === 'visa') { openApplyVisaModal(); return; }
+    if (key === 'contact') { openContactModal(); return; }
+  }
+
+  var ACTIVITY_ICON_META = {
+    application_status: { icon: 'edit', color: '#3B5583', bg: '#EAF0F6' },
+    document_status: { icon: 'check-circle', color: '#22C55E', bg: '#ECFDF5' },
+    document_remark: { icon: 'message-square', color: '#22C55E', bg: '#ECFDF5' },
+    payment_status: { icon: 'clock', color: '#F59E0B', bg: '#FFFBEB' },
+    remark: { icon: 'message-square', color: '#8B5CF6', bg: '#F5F3FF' }
+  };
+  var ACTIVITY_ICON_DEFAULT = { icon: 'bell', color: '#6B7F99', bg: '#F1F5F9' };
 
   function renderRecentActivity() {
     var el = document.getElementById('psRecentActivity');
-    if (!notificationRows.length) { el.innerHTML = '<p class="ps-hint">No recent activity yet.</p>'; return; }
-    el.innerHTML = notificationRows.slice(0, 5).map(function (n) {
+    if (!el) return;
+    var rows = notificationRows.slice(0, 4);
+    if (!rows.length) { el.innerHTML = '<p class="ps-hint">No recent activity yet</p>'; return; }
+    el.innerHTML = rows.map(function (n) {
+      var meta = ACTIVITY_ICON_META[n.type] || ACTIVITY_ICON_DEFAULT;
       var when = n.created_at ? timeAgo(n.created_at) : '';
-      return '<div style="display:flex;gap:8px;padding:7px 0;align-items:flex-start;">' +
-        '<span style="width:6px;height:6px;border-radius:50%;background:var(--navy);margin-top:6px;flex-shrink:0;"></span>' +
-        '<div><p style="font-size:0.78rem;color:var(--navy-dk);line-height:1.4;">' + escapeHTML(n.message) + '</p>' +
-        '<p class="ps-hint" style="font-size:0.7rem;">' + when + '</p></div></div>';
+      return '<div class="ps-activity-row">' +
+        '<span class="ps-activity-icon" style="background:' + meta.bg + ';color:' + meta.color + ';">' + window.PSIcon(meta.icon, 16) + '</span>' +
+        '<div class="ps-activity-body"><p class="ps-activity-title">' + escapeHTML(n.message) + '</p></div>' +
+        '<span class="ps-activity-time">' + when + '</span>' +
+        '</div>';
     }).join('');
   }
 
@@ -342,39 +513,63 @@
   }
 
   /* ==================================================================
-     Visa Assistance — applicants list + Apply-a-Visa modal
+     Visa Assistance — application group list + Apply-a-Visa modal
      ================================================================== */
-  function loadVisaPanel() {
-    supabaseClient.from('applications').select('*').eq('client_id', session.user.id).maybeSingle()
-      .then(function (result) { document.getElementById('psVisaTimeline').innerHTML = buildTimelineHTML(result.data || null); })
-      .catch(function () { document.getElementById('psVisaTimeline').innerHTML = '<p class="ps-hint">Your application will appear here once Calestia sets it up.</p>'; });
+  function renderApplicationGroups() {
+    var container = document.getElementById('psApplicationGroupsList');
+    if (!container) return;
+    var groups = computeApplicationGroups();
+    if (!groups.length) { container.innerHTML = ''; return; }
 
-    loadApplyVisaApplicants().then(renderApplicantsList);
-  }
+    container.innerHTML = groups.map(function (g) { return applicationGroupCardHTML(g); }).join('');
 
-  function loadApplyVisaApplicants() {
-    return supabaseClient.from('visa_applicants').select('*').eq('client_id', session.user.id).order('created_at', { ascending: true })
-      .then(function (result) { avApplicants = result.error ? [] : (result.data || []); })
-      .catch(function () { avApplicants = []; });
-  }
-
-  function renderApplicantsList() {
-    var el = document.getElementById('psApplicantsList');
-    if (!el) return;
-    if (!avApplicants.length) {
-      el.innerHTML = '<div class="ps-empty" style="padding:20px 10px;">' +
-        '<div class="ps-empty-icon">' + window.PSIcon('user-plus', 24) + '</div>' +
-        '<h3>No applicants yet</h3>' +
-        '<p>Click "Apply a Visa" to add your first traveler and start your application.</p>' +
-        '</div>';
-      return;
-    }
-    el.innerHTML = avApplicants.map(function (a, i) { return applicantCardHTML(a, i, 'panel'); }).join('');
-    el.querySelectorAll('[data-applicant-edit]').forEach(function (btn) {
-      btn.addEventListener('click', function () { openApplyVisaModal(btn.getAttribute('data-applicant-edit')); });
+    container.querySelectorAll('[data-app-continue]').forEach(function (btn) {
+      btn.addEventListener('click', function () { openApplyVisaModalForBatch(btn.getAttribute('data-app-continue'), 'payment'); });
     });
-    el.querySelectorAll('[data-applicant-delete]').forEach(function (btn) {
-      btn.addEventListener('click', function () { deleteApplicant(btn.getAttribute('data-applicant-delete')); });
+    container.querySelectorAll('[data-app-view]').forEach(function (btn) {
+      btn.addEventListener('click', function () { openApplyVisaModalForBatch(btn.getAttribute('data-app-view'), 'summary'); });
+    });
+  }
+
+  function applicationGroupCardHTML(g) {
+    var display = parseVisaTypeDisplay(g.visaType);
+    var meta = APP_STATUS_META[g.status] || APP_STATUS_META.waiting_for_payment;
+    var flag = flagForVisaType(g.visaType);
+    var count = g.applicants.length;
+
+    var actionHTML;
+    if (g.status === 'waiting_for_payment') {
+      actionHTML = '<button type="button" class="ps-btn ps-btn-primary" data-app-continue="' + g.batchId + '">Continue</button>';
+    } else if (g.status === 'under_review') {
+      actionHTML = '<button type="button" class="ps-btn ps-btn-outline" disabled style="opacity:0.6;cursor:not-allowed;">Pending Verification</button>';
+    } else if (g.status === 'completed') {
+      actionHTML = '<button type="button" class="ps-btn ps-btn-outline" data-app-view="' + g.batchId + '">View Details</button>';
+    } else {
+      actionHTML = '<button type="button" class="ps-btn ps-btn-danger" data-app-continue="' + g.batchId + '">Re-submit Payment</button>';
+    }
+
+    return '<div class="ps-app-card">' +
+      '<div class="ps-app-card-flag">' + flag + '</div>' +
+      '<div class="ps-app-card-main">' +
+      '<div class="ps-app-card-title-row"><h3>' + escapeHTML(display.heading) + '</h3>' +
+      '<span class="ps-badge ps-badge-' + meta.badge + '">' + escapeHTML(meta.label) + '</span></div>' +
+      '<div class="ps-app-card-meta">' +
+      (display.subtype ? '<span>' + escapeHTML(display.subtype) + '</span><span class="ps-app-card-meta-dot"></span>' : '') +
+      '<span>' + count + ' Applicant' + (count === 1 ? '' : 's') + '</span>' +
+      '</div></div>' +
+      '<div class="ps-app-card-action">' + actionHTML + '</div>' +
+      '</div>';
+  }
+
+  function currentBatchApplicants() {
+    return avApplicants.filter(function (a) { return a.application_batch_id === avCurrentBatchId; });
+  }
+
+  function generateBatchId() {
+    if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
     });
   }
 
@@ -385,32 +580,20 @@
     return '<span class="ps-badge" style="margin-left:8px;' + (isPremium ? 'background:#FEF3C7;color:#D97706;' : 'background:#EAF0F6;color:#3B5583;') + '">' + escapeHTML(label) + '</span>';
   }
 
-  function applicantCardHTML(a, i, mode) {
-    var editAttr = mode === 'modal' ? 'data-av-edit' : 'data-applicant-edit';
-    var deleteAttr = mode === 'modal' ? 'data-av-delete' : 'data-applicant-delete';
+  function applicantCardHTML(a, i) {
     var travelDateStr = a.travel_date ? new Date(a.travel_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—';
     return '<div class="ps-applicant-card">' +
       '<div class="ps-applicant-card-top">' +
       '<div><h4>Applicant ' + (i + 1) + '</h4><strong>' + escapeHTML(((a.first_name || '').toUpperCase() + ' ' + (a.last_name || '').toUpperCase()).trim() || 'Unnamed') + '</strong>' + tierBadgeHTML(a.service_tier || 'standard') + '</div>' +
       '<div style="display:flex;gap:6px;flex-shrink:0;">' +
-      '<button type="button" class="ps-btn ps-btn-outline ps-btn-sm" ' + editAttr + '="' + a.id + '">' + window.PSIcon('edit', 13) + ' Edit</button>' +
-      '<button type="button" class="ps-btn ps-btn-danger ps-btn-sm" ' + deleteAttr + '="' + a.id + '">' + window.PSIcon('trash', 13) + ' Delete</button>' +
+      '<button type="button" class="ps-btn ps-btn-outline ps-btn-sm" data-av-edit="' + a.id + '">' + window.PSIcon('edit', 13) + ' Edit</button>' +
+      '<button type="button" class="ps-btn ps-btn-danger ps-btn-sm" data-av-delete="' + a.id + '">' + window.PSIcon('trash', 13) + ' Delete</button>' +
       '</div></div>' +
       '<div class="ps-applicant-card-grid">' +
       '<div><span>Visa Type</span><strong>' + escapeHTML(a.visa_type || '—') + '</strong></div>' +
       '<div><span>Passport Number</span><strong>' + (a.passport_number ? '••••••••' : '—') + '</strong></div>' +
       '<div><span>Travel Date</span><strong>' + travelDateStr + '</strong></div>' +
       '</div></div>';
-  }
-
-  function deleteApplicant(id) {
-    supabaseClient.from('visa_applicants').delete().eq('id', id).eq('client_id', session.user.id)
-      .then(function (result) {
-        if (result.error) { showToast(result.error.message || 'Could not remove applicant.', true); return; }
-        showToast('Applicant removed.');
-        loadVisaPanel();
-      })
-      .catch(function () { showToast('Something went wrong.', true); });
   }
 
   function emptyApplicant() { return Object.assign({}, AV_EMPTY_APPLICANT); }
@@ -448,24 +631,27 @@
     return tierBreakdown(applicants).reduce(function (sum, b) { return sum + b.subtotal; }, 0);
   }
 
-  function openApplyVisaModal(editId) {
+  function openApplyVisaModal() {
     avSelectedPaymentMethod = null;
     avReceiptFile = null;
-    loadApplyVisaApplicants().then(function () {
-      if (editId) {
-        var found = avApplicants.filter(function (a) { return a.id === editId; })[0];
-        avEditingId = editId;
-        avFormData = found ? applicantRowToFormData(found) : emptyApplicant();
-        avStep = 'form';
-      } else if (avApplicants.length) {
-        avEditingId = null;
-        avFormData = emptyApplicant();
-        avStep = 'summary';
-      } else {
-        avEditingId = null;
-        avFormData = emptyApplicant();
-        avStep = 'form';
-      }
+    avCurrentBatchId = generateBatchId();
+    loadClientCoreData().then(function () {
+      avEditingId = null;
+      avFormData = emptyApplicant();
+      avStep = 'form';
+      renderApplyVisaModal();
+      openModal('applyVisaModal');
+    });
+  }
+
+  function openApplyVisaModalForBatch(batchId, step) {
+    avSelectedPaymentMethod = null;
+    avReceiptFile = null;
+    avCurrentBatchId = batchId;
+    loadClientCoreData().then(function () {
+      avEditingId = null;
+      avFormData = emptyApplicant();
+      avStep = step || (currentBatchApplicants().length ? 'summary' : 'form');
       renderApplyVisaModal();
       openModal('applyVisaModal');
     });
@@ -478,10 +664,12 @@
     avSelectedPaymentMethod = null;
     avReceiptFile = null;
     avLastSubmission = null;
+    avCurrentBatchId = null;
   }
 
   function avEditApplicant(id) {
     var found = avApplicants.filter(function (a) { return a.id === id; })[0];
+    if (found) avCurrentBatchId = found.application_batch_id;
     avEditingId = id;
     avFormData = found ? applicantRowToFormData(found) : emptyApplicant();
     avStep = 'form';
@@ -492,11 +680,11 @@
     supabaseClient.from('visa_applicants').delete().eq('id', id).eq('client_id', session.user.id)
       .then(function (result) {
         if (result.error) { showToast(result.error.message || 'Could not remove applicant.', true); return; }
-        return loadApplyVisaApplicants();
+        return loadClientCoreData();
       })
       .then(function () {
         renderApplyVisaModal();
-        renderApplicantsList();
+        renderDashboardAndVisaPages();
       })
       .catch(function () { showToast('Something went wrong.', true); });
   }
@@ -524,16 +712,16 @@
 
     var op = avEditingId
       ? supabaseClient.from('visa_applicants').update(data).eq('id', avEditingId).eq('client_id', session.user.id)
-      : supabaseClient.from('visa_applicants').insert(Object.assign({ client_id: session.user.id }, data));
+      : supabaseClient.from('visa_applicants').insert(Object.assign({ client_id: session.user.id, application_batch_id: avCurrentBatchId }, data));
 
     op.then(function (result) {
       if (result.error) throw result.error;
       avEditingId = null;
       avStep = 'summary';
-      return loadApplyVisaApplicants();
+      return loadClientCoreData();
     }).then(function () {
       renderApplyVisaModal();
-      renderApplicantsList();
+      renderDashboardAndVisaPages();
     }).catch(function (err) {
       if (btn) { btn.disabled = false; btn.textContent = 'Save & Continue'; }
       showToast((err && err.message) || 'Could not save applicant.', true);
@@ -546,7 +734,8 @@
     if (btn) { btn.disabled = true; btn.textContent = 'Submitting…'; }
 
     var clientId = session.user.id;
-    var total = visaTotalFor(avApplicants);
+    var applicants = currentBatchApplicants();
+    var total = visaTotalFor(applicants);
     var path = clientId + '/' + Date.now() + '-' + avReceiptFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
 
     supabaseClient.storage.from('payment-receipts').upload(path, avReceiptFile, { upsert: false })
@@ -554,8 +743,9 @@
         if (uploadResult.error) throw uploadResult.error;
         return supabaseClient.from('payment_submissions').insert({
           client_id: clientId,
+          application_batch_id: avCurrentBatchId,
           method: avSelectedPaymentMethod,
-          applicant_count: avApplicants.length || 1,
+          applicant_count: applicants.length || 1,
           amount: total,
           receipt_path: path,
           receipt_file_name: avReceiptFile.name
@@ -563,11 +753,10 @@
       })
       .then(function (result) {
         if (result.error) throw result.error;
-        avLastSubmission = { amount: total, applicantCount: avApplicants.length || 1, method: avSelectedPaymentMethod };
+        avLastSubmission = { amount: total, applicantCount: applicants.length || 1, method: avSelectedPaymentMethod };
         avStep = 'confirmation';
         renderApplyVisaModal();
-        loadVisaPanel();
-        loadDocumentsAccessState();
+        refreshClientCoreData();
       })
       .catch(function (err) {
         if (btn) { btn.disabled = false; btn.textContent = 'Submit Payment'; }
@@ -615,7 +804,7 @@
     }).join('');
     return '<div style="margin-bottom:18px;">' +
       '<label style="display:block;font-size:0.7rem;font-weight:700;color:var(--ps-text-dim);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">Service Tier *</label>' +
-      '<div class="ps-payment-methods" style="grid-template-columns:repeat(2,1fr);">' + cardsHTML + '</div>' +
+      '<div class="ps-payment-methods ps-tier-methods">' + cardsHTML + '</div>' +
       '</div>';
   }
 
@@ -632,9 +821,10 @@
       { key: 'travel_date', label: 'Travel Date', type: 'date' },
       { key: 'visa_type', label: 'Type of Visa', options: window.CALESTIA_VISA_TYPES, full: true }
     ];
+    var batchApplicants = currentBatchApplicants();
     var applicantNumber = avEditingId
-      ? (avApplicants.map(function (a) { return a.id; }).indexOf(avEditingId) + 1) || (avApplicants.length + 1)
-      : (avApplicants.length + 1);
+      ? (batchApplicants.map(function (a) { return a.id; }).indexOf(avEditingId) + 1) || (batchApplicants.length + 1)
+      : (batchApplicants.length + 1);
 
     var fieldsHTML = fields.map(function (f) {
       var val = data[f.key] || '';
@@ -666,20 +856,22 @@
   }
 
   function avSummaryStepHTML() {
-    var cardsHTML = avApplicants.map(function (a, i) { return applicantCardHTML(a, i, 'modal'); }).join('');
+    var applicants = currentBatchApplicants();
+    var cardsHTML = applicants.map(function (a, i) { return applicantCardHTML(a, i); }).join('');
     return avStepperHTML() +
       '<div style="display:flex;flex-direction:column;gap:12px;margin-bottom:18px;">' + (cardsHTML || '<p class="ps-hint">No applicants added yet.</p>') + '</div>' +
       '<button type="button" class="ps-btn ps-btn-outline" id="avAddApplicantBtn" style="width:100%;justify-content:center;border-style:dashed;">' + window.PSIcon('plus', 15) + ' Add Applicant</button>' +
       '<div style="display:flex;justify-content:space-between;gap:10px;margin-top:22px;padding-top:18px;border-top:1px solid var(--ps-border);">' +
       '<button type="button" class="ps-btn ps-btn-outline" id="avCloseBtn">Go Back</button>' +
-      '<button type="button" class="ps-btn ps-btn-primary" id="avToPaymentBtn"' + (avApplicants.length ? '' : ' disabled') + '>Continue to Payment</button>' +
+      '<button type="button" class="ps-btn ps-btn-primary" id="avToPaymentBtn"' + (applicants.length ? '' : ' disabled') + '>Continue to Payment</button>' +
       '</div>';
   }
 
   function avPaymentStepHTML() {
     var methods = window.CALESTIA_PAYMENT_METHODS || [];
-    var breakdown = tierBreakdown(avApplicants);
-    var total = visaTotalFor(avApplicants);
+    var applicants = currentBatchApplicants();
+    var breakdown = tierBreakdown(applicants);
+    var total = visaTotalFor(applicants);
 
     var methodsHTML = methods.map(function (m) {
       var active = avSelectedPaymentMethod === m.key;
@@ -741,7 +933,7 @@
       '<p class="ps-hint" style="max-width:380px;margin:0 auto 20px;line-height:1.6;">Thank you for choosing Calestia Travel &amp; Tours. Our team will verify your payment and you\'ll get a notification once it\'s confirmed — typically within 1–2 business hours.</p>' +
       '<div class="ps-card ps-card-pad" style="text-align:left;background:var(--ps-bg);max-width:420px;margin:0 auto 22px;">' +
       '<div class="ps-applicant-card-grid" style="grid-template-columns:repeat(2,1fr);">' +
-      '<div><span>Applicants</span><strong>' + (sub.applicantCount || avApplicants.length || 1) + '</strong></div>' +
+      '<div><span>Applicants</span><strong>' + (sub.applicantCount || currentBatchApplicants().length || 1) + '</strong></div>' +
       '<div><span>Amount Submitted</span><strong>₱' + (sub.amount || 0).toLocaleString() + '</strong></div>' +
       '<div><span>Payment Method</span><strong>' + escapeHTML((sub.method || '').toUpperCase()) + '</strong></div>' +
       '<div><span>Status</span><strong style="color:#b45309;">Pending Verification</strong></div>' +
@@ -777,7 +969,7 @@
   function wireApplyVisaStepEvents() {
     var cancelBtn = document.getElementById('avCancelBtn');
     if (cancelBtn) cancelBtn.addEventListener('click', function () {
-      if (avApplicants.length) { avStep = 'summary'; renderApplyVisaModal(); }
+      if (currentBatchApplicants().length) { avStep = 'summary'; renderApplyVisaModal(); }
       else closeModal('applyVisaModal');
     });
 
@@ -808,7 +1000,7 @@
 
     var toPaymentBtn = document.getElementById('avToPaymentBtn');
     if (toPaymentBtn) toPaymentBtn.addEventListener('click', function () {
-      if (!avApplicants.length) return;
+      if (!currentBatchApplicants().length) return;
       avStep = 'payment';
       renderApplyVisaModal();
     });
@@ -861,22 +1053,63 @@
   }
 
   /* ==================================================================
-     Documents access gating — locked until an application has a
+     Contact Support modal
+     ================================================================== */
+  function openContactModal() {
+    renderContactList();
+    var msgField = document.getElementById('contactMessage');
+    if (msgField) msgField.value = '';
+    openModal('contactModal');
+  }
+
+  function renderContactList() {
+    var contact = window.CALESTIA_SUPPORT_CONTACT || {};
+    var el = document.getElementById('psContactList');
+    if (!el) return;
+    var rows = [];
+    if (contact.phone) rows.push({ icon: 'phone', label: 'Phone / Viber / WhatsApp', value: contact.phone, href: 'tel:' + contact.phone.replace(/[^\d+]/g, '') });
+    if (contact.email) rows.push({ icon: 'mail', label: 'Email', value: contact.email, href: 'mailto:' + contact.email });
+    if (contact.facebookUrl) rows.push({ icon: 'message-square', label: 'Facebook Messenger', value: 'Message us', href: contact.facebookUrl });
+
+    el.innerHTML = rows.map(function (r) {
+      return '<a href="' + escapeHTML(r.href) + '" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;border:1px solid var(--ps-border);text-decoration:none;">' +
+        '<span style="width:34px;height:34px;border-radius:10px;background:var(--sky-lt);color:var(--navy);display:flex;align-items:center;justify-content:center;flex-shrink:0;">' + window.PSIcon(r.icon, 16) + '</span>' +
+        '<span><span style="display:block;font-size:0.7rem;color:var(--ps-text-dim);">' + escapeHTML(r.label) + '</span>' +
+        '<span style="display:block;font-size:0.85rem;font-weight:600;color:var(--navy-dk);">' + escapeHTML(r.value) + '</span></span>' +
+        '</a>';
+    }).join('');
+  }
+
+  function handleContactSend() {
+    var contact = window.CALESTIA_SUPPORT_CONTACT || {};
+    var messageField = document.getElementById('contactMessage');
+    var message = messageField ? messageField.value.trim() : '';
+    if (!message) { showToast('Please write a message first.', true); return; }
+    if (!contact.email) { showToast('No support email configured.', true); return; }
+    var name = (profile && (profile.full_name || profile.email)) || 'A client';
+    var subject = 'Support request from ' + name;
+    var body = message + '\n\n— ' + name + (profile && profile.email ? ' (' + profile.email + ')' : '');
+    window.location.href = 'mailto:' + contact.email + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+    showToast('Opening your email app…');
+  }
+
+  /* ==================================================================
+     Documents access gating — locked until any application group has a
      staff-verified payment
      ================================================================== */
   function getDocumentsAccessState(clientId) {
     return Promise.all([
       supabaseClient.from('visa_applicants').select('id', { count: 'exact', head: true }).eq('client_id', clientId),
-      supabaseClient.from('payment_submissions').select('*').eq('client_id', clientId).order('submitted_at', { ascending: false }).limit(1)
+      supabaseClient.from('payment_submissions').select('status').eq('client_id', clientId)
     ]).then(function (results) {
       var applicantCount = results[0].count || 0;
-      var latestPayment = (results[1].data && results[1].data[0]) || null;
+      var payments = results[1].data || [];
 
       if (!applicantCount) return { allowed: false, reason: 'no_application' };
-      if (!latestPayment) return { allowed: false, reason: 'no_payment' };
-      if (latestPayment.status === 'verified') return { allowed: true };
-      if (latestPayment.status === 'rejected') return { allowed: false, reason: 'payment_rejected' };
-      return { allowed: false, reason: 'awaiting_verification' };
+      if (!payments.length) return { allowed: false, reason: 'no_payment' };
+      if (payments.some(function (p) { return p.status === 'verified'; })) return { allowed: true };
+      if (payments.some(function (p) { return p.status === 'pending_verification'; })) return { allowed: false, reason: 'awaiting_verification' };
+      return { allowed: false, reason: 'payment_rejected' };
     }).catch(function () {
       return { allowed: false, reason: 'no_application' };
     });
@@ -959,15 +1192,10 @@
   }
 
   function openApplyVisaModalAtPayment() {
-    avSelectedPaymentMethod = null;
-    avReceiptFile = null;
-    loadApplyVisaApplicants().then(function () {
-      avEditingId = null;
-      avFormData = emptyApplicant();
-      avStep = avApplicants.length ? 'payment' : 'form';
-      renderApplyVisaModal();
-      openModal('applyVisaModal');
-    });
+    var groups = computeApplicationGroups();
+    var actionable = groups.filter(function (g) { return g.status === 'waiting_for_payment' || g.status === 'rejected'; })[0];
+    if (actionable) { openApplyVisaModalForBatch(actionable.batchId, 'payment'); return; }
+    openApplyVisaModal();
   }
 
   /* ==================================================================
@@ -990,12 +1218,11 @@
     rows.forEach(function (d) { documentsByType[d.document_type] = d; });
 
     var types = window.CALESTIA_DOCUMENT_TYPES || [];
-    var submitted = 0, pendingActions = 0;
+    var pendingActions = 0;
 
     var html = types.map(function (t) {
       var doc = documentsByType[t.key];
       var hasFile = !!(doc && doc.file_path);
-      if (hasFile) submitted++;
       if (doc && (doc.status === 'rejected' || doc.status === 'reupload_requested')) pendingActions++;
 
       var badgeColor = hasFile ? (DOC_STATUS_BADGE[doc.status] || 'gray') : 'gray';
@@ -1025,8 +1252,6 @@
     }).join('');
 
     document.getElementById('psDocumentsGrid').innerHTML = html;
-    document.getElementById('statDocsSubmitted').textContent = submitted + '/' + types.length;
-    document.getElementById('statPendingActions').textContent = String(pendingActions);
 
     var navBadge = document.getElementById('psNavDocsBadge');
     if (pendingActions > 0) { navBadge.textContent = String(pendingActions); navBadge.classList.remove('is-hidden'); }
@@ -1150,7 +1375,6 @@
     var unread = notificationRows.filter(function (n) { return !n.is_read; });
     var dot = document.getElementById('psBellDot');
     var navBadge = document.getElementById('psNavNotifBadge');
-    document.getElementById('statUnreadNotifs').textContent = String(unread.length);
 
     if (unread.length) { dot.classList.remove('is-hidden'); navBadge.textContent = unread.length > 9 ? '9+' : String(unread.length); navBadge.classList.remove('is-hidden'); }
     else { dot.classList.add('is-hidden'); navBadge.classList.add('is-hidden'); }
@@ -1324,25 +1548,65 @@
         PROFILE_FIELDS.forEach(function (id) { document.getElementById(id).disabled = true; });
         document.getElementById('psEditProfileBtn').textContent = 'Edit Profile';
         document.getElementById('psProfileSaveRow').classList.add('is-hidden');
-        document.getElementById('psUserName').textContent = payload.full_name || profile.email;
-        document.getElementById('psProfileName').textContent = payload.full_name || profile.email;
-        document.getElementById('psBannerName').textContent = (payload.full_name || profile.email).split(' ')[0];
+        var displayName = payload.full_name || profile.email;
+        document.getElementById('psUserName').textContent = displayName;
+        document.getElementById('psProfileName').textContent = displayName;
+        document.getElementById('psHeroTitle').textContent = 'Welcome Back, ' + displayName.split(' ')[0] + '! 👋';
       })
       .catch(function () { showToast('Something went wrong. Please try again.', true); });
   }
 
   /* ==================================================================
-     Realtime
-     ================================================================== */
+     Realtime + polling sync
+     ==================================================================
+     Realtime covers the common case instantly. The 60s/focus poll (C1) is
+     a deliberate backstop: this codebase already leans on Supabase
+     realtime everywhere, but a dropped/stale channel (sleeping tab,
+     flaky connection) shouldn't mean a client waits indefinitely to see
+     their payment got verified — everything here re-renders in place,
+     never a full reload, so scroll position / open modals / typed but
+     unsaved form input all survive a poll tick untouched. */
   function subscribeRealtime() {
     var clientId = session.user.id;
     supabaseClient.channel('client-portal-' + clientId)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'documents', filter: 'client_id=eq.' + clientId }, function () { if (documentsAccessState && documentsAccessState.allowed) loadDocuments(); })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'applications', filter: 'client_id=eq.' + clientId }, function () { loadDashboard(); loadVisaPanel(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'applications', filter: 'client_id=eq.' + clientId }, refreshClientCoreData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: 'client_id=eq.' + clientId }, loadNotifications)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'visa_applicants', filter: 'client_id=eq.' + clientId }, function () { loadVisaPanel(); loadDocumentsAccessState(); })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'payment_submissions', filter: 'client_id=eq.' + clientId }, function () { loadVisaPanel(); loadDocumentsAccessState(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'visa_applicants', filter: 'client_id=eq.' + clientId }, refreshClientCoreData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payment_submissions', filter: 'client_id=eq.' + clientId }, refreshClientCoreData)
       .subscribe();
+  }
+
+  function startPollingSync() {
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') runSyncPoll();
+    });
+    window.addEventListener('focus', runSyncPoll);
+    pollIntervalId = window.setInterval(runSyncPoll, 60000);
+  }
+
+  function runSyncPoll() {
+    var prevAllowed = documentsAccessState ? documentsAccessState.allowed : null;
+    var prevGroupStatuses = {};
+    computeApplicationGroups().forEach(function (g) { prevGroupStatuses[g.batchId] = g.status; });
+
+    loadClientCoreData().then(function () {
+      renderDashboardAndVisaPages();
+
+      computeApplicationGroups().forEach(function (g) {
+        var prevStatus = prevGroupStatuses[g.batchId];
+        if (!prevStatus || prevStatus === g.status) return;
+        if (g.status === 'completed') showToast('Your payment has been verified — documents unlocked.');
+        else if (g.status === 'rejected') showToast('Payment could not be verified — please contact support.', true);
+        else if (g.status === 'under_review' && prevStatus === 'waiting_for_payment') showToast('Payment received — under review.');
+      });
+
+      return loadDocumentsAccessState();
+    }).then(function (state) {
+      if (prevAllowed === false && state.allowed) showToast('Your payment has been verified — documents unlocked.');
+    }).catch(function () {});
+
+    loadNotifications();
   }
 
   /* ==================================================================

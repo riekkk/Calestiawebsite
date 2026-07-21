@@ -15,6 +15,7 @@
 
   var PAGE_META = {
     dashboard: ['Dashboard', "Employee Dashboard · Calestia Travel & Tours"],
+    payments: ['Review Payments', 'Verify or reject client payment submissions'],
     clients: ['Clients', 'Manage and review your assigned clients'],
     applications: ['Applications', 'Review and update visa application statuses'],
     documents: ['Documents', 'Verify, reject, or request re-uploads'],
@@ -34,6 +35,7 @@
     PS.injectSharedModals();
     PS.wireClientDetailModal(refreshAllData);
     PS.wireShell(PAGE_META, {
+      payments: PS.loadPaymentsQueue,
       clients: loadClients,
       applications: loadApplications,
       documents: loadDocumentQueue,
@@ -52,11 +54,13 @@
     });
 
     PS.subscribeRealtime({ onCoreChange: refreshAllData });
+    PS.startPaymentsBadgePolling();
   }
 
   function refreshAllData() {
     loadDashboard();
     loadClients();
+    if (document.querySelector('.ps-panel[data-panel="payments"]').classList.contains('is-active')) PS.loadPaymentsQueue();
     if (document.querySelector('.ps-panel[data-panel="applications"]').classList.contains('is-active')) loadApplications();
     if (document.querySelector('.ps-panel[data-panel="documents"]').classList.contains('is-active')) loadDocumentQueue();
   }

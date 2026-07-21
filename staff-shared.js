@@ -158,6 +158,9 @@ window.PSStaff = (function () {
     if (closeBtn) closeBtn.addEventListener('click', function () { shell.classList.remove('ps-sidebar-open'); });
     if (backdrop) backdrop.addEventListener('click', function () { shell.classList.remove('ps-sidebar-open'); });
 
+    var railToggle = document.getElementById('psSidebarRailToggle');
+    if (railToggle) railToggle.addEventListener('click', function () { shell.classList.toggle('ps-sidebar-expanded'); });
+
     var bellBtn = document.getElementById('psBellBtn');
     var bellPanel = document.getElementById('psBellPanel');
     if (bellBtn && bellPanel) {
@@ -677,7 +680,12 @@ window.PSStaff = (function () {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'applications' }, function (payload) { handleCoreChange(payload, opts); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'remarks' }, function (payload) { handleCoreChange(payload, opts); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'visa_applicants' }, function (payload) { handleCoreChange(payload, opts); })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'payment_submissions' }, function (payload) { handleCoreChange(payload, opts); });
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payment_submissions' }, function (payload) {
+        handleCoreChange(payload, opts);
+        refreshPaymentsBadge();
+        var paymentsPanel = document.querySelector('.ps-panel[data-panel="payments"]');
+        if (paymentsPanel && paymentsPanel.classList.contains('is-active')) loadPaymentsQueue();
+      });
 
     if (opts.onProfilesChange) channel.on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, opts.onProfilesChange);
     if (opts.onInvitationsChange) channel.on('postgres_changes', { event: '*', schema: 'public', table: 'employee_invitations' }, opts.onInvitationsChange);
@@ -693,6 +701,133 @@ window.PSStaff = (function () {
         if (activeClientId && affectedClientId === activeClientId) refreshClientDetail(activeClientId);
       }, 400);
     }
+  }
+
+  /* ------------------------------------------------------------------
+     Review Payments — shared between Employee and Admin portals. The
+     actual verify/reject flow, receipt preview, and status update path
+     all stay in the Client Detail Modal above (openClientDetail /
+     updatePaymentStatus) — this is only the cross-client queue + filters
+     that route staff into that same modal, so nothing here duplicates it.
+     ------------------------------------------------------------------ */
+  var paymentsQueueCache = [];
+  var paymentsApplicantsCache = [];
+  var paymentsActiveFilter = 'pending_verification';
+
+  var PAYMENTS_FILTERS = [
+    { key: 'pending_verification', label: 'Pending' },
+    { key: 'verified', label: 'Verified' },
+    { key: 'rejected', label: 'Rejected' },
+    { key: '', label: 'All' }
+  ];
+  var PAYMENTS_METHOD_LABEL = { gcash: 'GCash', maya: 'Maya', bank: 'GoTyme / Bank Transfer' };
+
+  function loadPaymentsQueue() {
+    var sortSelect = document.getElementById('paymentsSortSelect');
+    if (sortSelect && !sortSelect.dataset.wired) {
+      sortSelect.dataset.wired = '1';
+      sortSelect.addEventListener('change', renderPaymentsQueue);
+    }
+
+    Promise.all([
+      supabaseClient.from('payment_submissions').select('*').order('submitted_at', { ascending: false }),
+      supabaseClient.from('visa_applicants').select('id, client_id, application_batch_id, visa_type')
+    ]).then(function (results) {
+      paymentsQueueCache = results[0].data || [];
+      paymentsApplicantsCache = results[1].data || [];
+      renderPaymentsFilterTabs();
+      renderPaymentsQueue();
+      refreshPaymentsBadge();
+    }).catch(function () {
+      var el = document.getElementById('paymentsQueueList');
+      if (el) el.innerHTML = '<p class="ps-hint">Could not load payments.</p>';
+    });
+  }
+
+  function renderPaymentsFilterTabs() {
+    var tabs = document.getElementById('paymentsFilterTabs');
+    if (!tabs) return;
+    tabs.innerHTML = PAYMENTS_FILTERS.map(function (f) {
+      var count = f.key ? paymentsQueueCache.filter(function (p) { return p.status === f.key; }).length : paymentsQueueCache.length;
+      var active = paymentsActiveFilter === f.key;
+      return '<button type="button" class="ps-tab-btn' + (active ? ' is-active' : '') + '" data-payments-filter="' + f.key + '">' + f.label + ' (' + count + ')</button>';
+    }).join('');
+    tabs.querySelectorAll('[data-payments-filter]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        paymentsActiveFilter = btn.getAttribute('data-payments-filter');
+        renderPaymentsFilterTabs();
+        renderPaymentsQueue();
+      });
+    });
+  }
+
+  function renderPaymentsQueue() {
+    var container = document.getElementById('paymentsQueueList');
+    if (!container) return;
+    var rows = paymentsActiveFilter ? paymentsQueueCache.filter(function (p) { return p.status === paymentsActiveFilter; }) : paymentsQueueCache.slice();
+
+    var sortSelect = document.getElementById('paymentsSortSelect');
+    var sortBy = sortSelect ? sortSelect.value : 'submitted_at';
+    rows = rows.slice().sort(function (a, b) {
+      if (sortBy === 'amount') return (b.amount || 0) - (a.amount || 0);
+      if (sortBy === 'status') return (a.status || '').localeCompare(b.status || '');
+      return new Date(b.submitted_at) - new Date(a.submitted_at);
+    });
+
+    if (!rows.length) {
+      container.innerHTML = '<div class="ps-empty"><div class="ps-empty-icon">' + window.PSIcon('credit-card', 24) + '</div><h3>Nothing here</h3><p>No payment submissions match this filter.</p></div>';
+      return;
+    }
+
+    container.innerHTML = rows.map(paymentRowHTML).join('');
+    container.querySelectorAll('[data-review-payment]').forEach(function (btn) {
+      btn.addEventListener('click', function () { openClientDetail(btn.getAttribute('data-review-payment')); });
+    });
+  }
+
+  function paymentRowHTML(p) {
+    var client = profilesCache[p.client_id];
+    var name = client ? (client.full_name || client.email) : 'Unknown';
+    var email = client ? (client.email || '') : '';
+    var batchApplicants = paymentsApplicantsCache.filter(function (a) { return a.application_batch_id === p.application_batch_id; });
+    var visaType = batchApplicants[0] ? batchApplicants[0].visa_type : '—';
+    var applicantCount = p.applicant_count || batchApplicants.length || 1;
+    var badgeColor = p.status === 'verified' ? 'green' : p.status === 'rejected' ? 'red' : 'amber';
+    var badgeLabel = p.status === 'verified' ? 'Verified' : p.status === 'rejected' ? 'Rejected' : 'Pending Verification';
+    var methodLabel = PAYMENTS_METHOD_LABEL[p.method] || p.method;
+
+    return '<div class="ps-pay-row">' +
+      '<div class="ps-pay-row-top">' +
+      '<div class="ps-pay-client"><strong>' + escapeHTML(name) + '</strong><span>' + escapeHTML(email) + '</span></div>' +
+      '<span class="ps-badge ps-badge-' + badgeColor + '">' + escapeHTML(badgeLabel) + '</span>' +
+      '</div>' +
+      '<div class="ps-pay-row-line"><span>' + escapeHTML(visaType || '—') + '</span><span>' + applicantCount + ' applicant(s)</span></div>' +
+      '<div class="ps-pay-row-line"><span class="ps-pay-amount">₱' + Number(p.amount || 0).toLocaleString() + '</span><span>' + escapeHTML(methodLabel || '') + '</span><span>' + timeAgo(p.submitted_at) + '</span></div>' +
+      '<button type="button" class="ps-btn ps-btn-primary ps-btn-sm" data-review-payment="' + p.client_id + '">Review</button>' +
+      '</div>';
+  }
+
+  function refreshPaymentsBadge() {
+    return supabaseClient.from('payment_submissions').select('id', { count: 'exact', head: true }).eq('status', 'pending_verification')
+      .then(function (result) {
+        var count = result.count || 0;
+        document.querySelectorAll('#psNavPaymentsBadge').forEach(function (badge) {
+          if (count > 0) { badge.textContent = count > 9 ? '9+' : String(count); badge.classList.remove('is-hidden'); }
+          else badge.classList.add('is-hidden');
+        });
+        return count;
+      })
+      .catch(function () { return 0; });
+  }
+
+  var paymentsBadgePollId = null;
+  function startPaymentsBadgePolling() {
+    refreshPaymentsBadge();
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') refreshPaymentsBadge();
+    });
+    window.addEventListener('focus', refreshPaymentsBadge);
+    paymentsBadgePollId = window.setInterval(refreshPaymentsBadge, 60000);
   }
 
   return {
@@ -717,6 +852,9 @@ window.PSStaff = (function () {
     handleDocAction: handleDocAction,
     wireSettingsPanel: wireSettingsPanel,
     subscribeRealtime: subscribeRealtime,
+    loadPaymentsQueue: loadPaymentsQueue,
+    refreshPaymentsBadge: refreshPaymentsBadge,
+    startPaymentsBadgePolling: startPaymentsBadgePolling,
     DOC_STATUS_BADGE: DOC_STATUS_BADGE,
     APP_STATUS_BADGE: APP_STATUS_BADGE
   };

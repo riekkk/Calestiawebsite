@@ -159,6 +159,32 @@ window.CALESTIA_PAYMENT_METHODS = [
 ];
 
 /* ==========================================================================
+   Dashboard "Tour Packages" destination tiles — Japan-focused (Calestia is a
+   Japan visa specialist). Every tile opens the external tour-packages.html
+   in a new tab, same as Browse Tours / My Bookings — there's no per-tile
+   routing.
+   ========================================================================== */
+window.CALESTIA_DASHBOARD_DESTINATIONS = [
+  { name: 'Tokyo', image: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=300&h=200&fit=crop&auto=format' },
+  { name: 'Osaka', image: 'https://images.unsplash.com/photo-1590559899731-a382839e5549?w=300&h=200&fit=crop&auto=format' },
+  { name: 'Kyoto', image: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=300&h=200&fit=crop&auto=format' },
+  { name: 'Hokkaido', image: 'https://images.unsplash.com/photo-1548813831-808ce3b93c65?w=300&h=200&fit=crop&auto=format' }
+];
+
+/* ==========================================================================
+   Client Portal "Contact Support" — same details already published on the
+   public site's Contact section (index.html). Facebook is left unset
+   (null) on purpose: no Facebook Page URL exists anywhere in this repo, and
+   the Contact modal skips rendering a row for any field that's null rather
+   than link to a guessed/placeholder address.
+   ========================================================================== */
+window.CALESTIA_SUPPORT_CONTACT = {
+  email: 'calestia.assistance@gmail.com',
+  phone: '+63 960 304 1887',
+  facebookUrl: null
+};
+
+/* ==========================================================================
    Role → portal file map. Used after sign-in / password reset to land each
    account on the right portal, and by each portal's own gate to bounce a
    signed-in visitor of the wrong role to where they actually belong.
