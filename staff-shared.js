@@ -233,6 +233,14 @@ window.PSStaff = (function () {
               '<div id="clientDetailDocuments" style="display:flex;flex-direction:column;gap:10px;"></div>' +
             '</div>' +
             '<div class="ps-modal-section">' +
+              '<h3>Visa Applicants <span style="font-weight:400;color:var(--ps-text-dim);">(entered by the client)</span></h3>' +
+              '<div id="clientDetailApplicants" style="display:flex;flex-direction:column;gap:10px;"></div>' +
+            '</div>' +
+            '<div class="ps-modal-section">' +
+              '<h3>Payment Submissions</h3>' +
+              '<div id="clientDetailPayments" style="display:flex;flex-direction:column;gap:10px;"></div>' +
+            '</div>' +
+            '<div class="ps-modal-section">' +
               '<h3>Remarks <span style="font-weight:400;color:var(--ps-text-dim);">(visible to the client)</span></h3>' +
               '<div id="clientRemarksList"></div>' +
               '<div class="ps-add-note-row"><textarea id="newRemarkText" placeholder="e.g. Please upload a clearer copy of your passport bio page."></textarea>' +
@@ -306,6 +314,8 @@ window.PSStaff = (function () {
       if (select && app) select.value = app.status;
     });
     refreshClientDocuments(clientId);
+    refreshClientVisaApplicants(clientId);
+    refreshClientPayments(clientId);
     refreshClientRemarks(clientId);
     refreshInternalNotes(clientId);
   }
@@ -397,8 +407,19 @@ window.PSStaff = (function () {
     }
     if (action === 'verify') { updateDocumentStatus(clientId, docType, 'verified', null); return; }
 
-    pendingDocAction = { clientId: clientId, docType: docType, action: action };
+    pendingDocAction = { kind: 'document', clientId: clientId, docType: docType, action: action };
     document.getElementById('docActionTitle').textContent = action === 'reject' ? 'Reject document' : 'Request re-upload';
+    document.getElementById('docActionRemark').value = '';
+    var modal = document.getElementById('docActionModal');
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+  }
+
+  function handlePaymentAction(clientId, paymentId, action, onChanged) {
+    if (action === 'verify') { updatePaymentStatus(clientId, paymentId, 'verified', null, onChanged); return; }
+
+    pendingDocAction = { kind: 'payment', clientId: clientId, paymentId: paymentId, action: action, onChanged: onChanged };
+    document.getElementById('docActionTitle').textContent = 'Reject payment submission';
     document.getElementById('docActionRemark').value = '';
     var modal = document.getElementById('docActionModal');
     modal.classList.add('is-open');
@@ -418,8 +439,12 @@ window.PSStaff = (function () {
       if (!pendingDocAction) return;
       var remark = document.getElementById('docActionRemark').value.trim();
       if (!remark) { toast('Please add a remark for the client.', true); return; }
-      var status = pendingDocAction.action === 'reject' ? 'rejected' : 'reupload_requested';
-      updateDocumentStatus(pendingDocAction.clientId, pendingDocAction.docType, status, remark, onChanged);
+      if (pendingDocAction.kind === 'payment') {
+        updatePaymentStatus(pendingDocAction.clientId, pendingDocAction.paymentId, 'rejected', remark, pendingDocAction.onChanged || onChanged);
+      } else {
+        var status = pendingDocAction.action === 'reject' ? 'rejected' : 'reupload_requested';
+        updateDocumentStatus(pendingDocAction.clientId, pendingDocAction.docType, status, remark, onChanged);
+      }
       modal.classList.remove('is-open');
       modal.setAttribute('aria-hidden', 'true');
       pendingDocAction = null;
@@ -436,6 +461,95 @@ window.PSStaff = (function () {
         if (result.error) { toast(result.error.message || 'Could not update document.', true); return; }
         toast('Document updated.');
         if (activeClientId === clientId) refreshClientDocuments(clientId);
+        if (onChanged) onChanged();
+      })
+      .catch(function () { toast('Something went wrong.', true); });
+  }
+
+  function refreshClientVisaApplicants(clientId) {
+    supabaseClient.from('visa_applicants').select('*').eq('client_id', clientId).order('created_at', { ascending: true })
+      .then(function (result) { renderClientVisaApplicants(result.data || []); });
+  }
+
+  function tierBadgeHTML(tier) {
+    var isPremium = tier === 'premium';
+    return '<span class="ps-badge" style="margin-left:8px;' + (isPremium ? 'background:#FEF3C7;color:#D97706;' : 'background:#EAF0F6;color:#3B5583;') + '">' + (isPremium ? 'Premium' : 'Standard') + '</span>';
+  }
+
+  function renderClientVisaApplicants(rows) {
+    var container = document.getElementById('clientDetailApplicants');
+    if (!rows.length) { container.innerHTML = '<p class="ps-hint">No applicants submitted yet.</p>'; return; }
+    container.innerHTML = rows.map(function (a, i) {
+      var name = ((a.first_name || '') + ' ' + (a.last_name || '')).trim() || 'Unnamed';
+      var travelDateStr = a.travel_date ? formatDate(a.travel_date) : '—';
+      return '<div class="ps-doc-card">' +
+        '<div class="ps-doc-card-top"><div><h4>Applicant ' + (i + 1) + ' — ' + escapeHTML(name) + '</h4></div>' + tierBadgeHTML(a.service_tier || 'standard') + '</div>' +
+        '<p class="ps-hint">' + escapeHTML(a.visa_type || '—') + ' · Passport ' + escapeHTML(a.passport_number || '—') + ' · Travel ' + travelDateStr + '</p>' +
+        '</div>';
+    }).join('');
+  }
+
+  var PAYMENT_STATUS_BADGE = { pending_verification: 'amber', verified: 'green', rejected: 'red' };
+  var PAYMENT_STATUS_LABEL = { pending_verification: 'Pending Verification', verified: 'Verified', rejected: 'Rejected' };
+
+  function refreshClientPayments(clientId) {
+    supabaseClient.from('payment_submissions').select('*').eq('client_id', clientId).order('submitted_at', { ascending: false })
+      .then(function (result) { renderClientPayments(clientId, result.data || []); });
+  }
+
+  function renderClientPayments(clientId, rows) {
+    var container = document.getElementById('clientDetailPayments');
+    if (!rows.length) { container.innerHTML = '<p class="ps-hint">No payment submissions yet.</p>'; return; }
+
+    container.innerHTML = rows.map(function (p) {
+      var badgeColor = PAYMENT_STATUS_BADGE[p.status] || 'gray';
+      var badgeLabel = PAYMENT_STATUS_LABEL[p.status] || p.status;
+      var actions = '<div class="ps-doc-actions">' +
+        '<button type="button" class="ps-btn ps-btn-outline ps-btn-sm" data-payment-action="preview" data-payment-id="' + p.id + '">Preview Receipt</button>' +
+        (p.status === 'pending_verification'
+          ? '<button type="button" class="ps-btn ps-btn-primary ps-btn-sm" data-payment-action="verify" data-payment-id="' + p.id + '">Verify</button>' +
+            '<button type="button" class="ps-btn ps-btn-danger ps-btn-sm" data-payment-action="reject" data-payment-id="' + p.id + '">Reject</button>'
+          : '') +
+        '</div>';
+
+      return '<div class="ps-doc-card">' +
+        '<div class="ps-doc-card-top"><div><h4>' + escapeHTML((p.method || '').toUpperCase()) + ' · ₱' + Number(p.amount || 0).toLocaleString() + '</h4>' +
+        '<p>' + p.applicant_count + ' applicant(s) · Submitted ' + timeAgo(p.submitted_at) + '</p></div>' +
+        '<span class="ps-badge ps-badge-' + badgeColor + '">' + escapeHTML(badgeLabel) + '</span></div>' +
+        (p.remarks ? '<div class="ps-doc-remark is-negative">' + window.PSIcon('message-square', 13) + '<span>' + escapeHTML(p.remarks) + '</span></div>' : '') +
+        actions +
+        '</div>';
+    }).join('');
+
+    container.querySelectorAll('[data-payment-action]').forEach(function (btn) {
+      var paymentId = btn.getAttribute('data-payment-id');
+      var action = btn.getAttribute('data-payment-action');
+      btn.addEventListener('click', function () {
+        if (action === 'preview') { previewPaymentReceipt(paymentId, rows); return; }
+        handlePaymentAction(clientId, paymentId, action, function () { if (activeClientId === clientId) refreshClientPayments(clientId); });
+      });
+    });
+  }
+
+  function previewPaymentReceipt(paymentId, rows) {
+    var row = rows.filter(function (r) { return r.id === paymentId; })[0];
+    var path = row && row.receipt_path;
+    if (!path) { toast('No receipt on file.', true); return; }
+    supabaseClient.storage.from('payment-receipts').createSignedUrl(path, 300)
+      .then(function (signed) { if (signed && signed.data && signed.data.signedUrl) window.open(signed.data.signedUrl, '_blank', 'noopener'); })
+      .catch(function () { toast('Could not open receipt.', true); });
+  }
+
+  function updatePaymentStatus(clientId, paymentId, status, remark, onChanged) {
+    var payload = { status: status, verified_by: profile.id, verified_at: new Date().toISOString() };
+    if (remark !== null && remark !== undefined) payload.remarks = remark;
+    if (status === 'verified') payload.remarks = null;
+
+    supabaseClient.from('payment_submissions').update(payload).eq('id', paymentId).eq('client_id', clientId)
+      .then(function (result) {
+        if (result.error) { toast(result.error.message || 'Could not update payment.', true); return; }
+        toast('Payment submission updated.');
+        if (activeClientId === clientId) refreshClientPayments(clientId);
         if (onChanged) onChanged();
       })
       .catch(function () { toast('Something went wrong.', true); });
@@ -561,7 +675,9 @@ window.PSStaff = (function () {
     var channel = supabaseClient.channel('staff-portal-' + profile.role)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'documents' }, function (payload) { handleCoreChange(payload, opts); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'applications' }, function (payload) { handleCoreChange(payload, opts); })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'remarks' }, function (payload) { handleCoreChange(payload, opts); });
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'remarks' }, function (payload) { handleCoreChange(payload, opts); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'visa_applicants' }, function (payload) { handleCoreChange(payload, opts); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payment_submissions' }, function (payload) { handleCoreChange(payload, opts); });
 
     if (opts.onProfilesChange) channel.on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, opts.onProfilesChange);
     if (opts.onInvitationsChange) channel.on('postgres_changes', { event: '*', schema: 'public', table: 'employee_invitations' }, opts.onInvitationsChange);

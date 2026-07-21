@@ -31,12 +31,37 @@
 
   var PAGE_META = {
     dashboard: ['Dashboard', 'Welcome back'],
+    visa: ['Visa Assistance', 'Apply for a visa and track your application'],
     documents: ['My Documents', 'Upload and manage your visa documents'],
     forms: ['Forms & Checklist', 'Download official forms and requirements'],
     notifications: ['Notifications', 'Updates on your application and documents'],
     reviews: ['Client Reviews', 'See what other clients say about us'],
     profile: ['My Profile', 'Manage your personal information']
   };
+
+  /* Apply-a-Visa modal state */
+  var AV_EMPTY_APPLICANT = { first_name: '', last_name: '', gender: '', date_of_birth: '', nationality: '', passport_number: '', passport_expiry: '', travel_date: '', visa_type: '', service_tier: 'standard' };
+  var avApplicants = [];
+  var avStep = 'form';
+  var avEditingId = null;
+  var avFormData = null;
+  var avSelectedPaymentMethod = null;
+  var avReceiptFile = null;
+  var avLastSubmission = null;
+
+  /* My Documents access gating — resolved once per portal load, refreshed on
+     relevant realtime changes and via the locked page's "Refresh Status" button. */
+  var documentsAccessState = null;
+  var DOCS_LOCK_MESSAGES = {
+    no_application: { title: 'Apply for a visa first', desc: "Document uploads unlock once you've submitted a visa application.", cta: 'Apply for a Visa' },
+    no_payment: { title: 'Complete your payment', desc: 'Your application is saved. Submit your payment to unlock document uploads.', cta: 'Complete Payment' },
+    awaiting_verification: { title: 'Payment under review', desc: 'Our team is verifying your payment. This usually takes 1–2 business hours. Documents will unlock automatically once verified.', cta: null },
+    payment_rejected: { title: 'Payment could not be verified', desc: 'Please contact our team or re-submit your payment.', cta: 'Re-submit Payment' }
+  };
+
+  /* Modal a11y state (focus trap / return focus), shared by every ps-modal on this page */
+  var modalReturnFocusEl = null;
+  var modalKeydownHandler = null;
 
   document.addEventListener('DOMContentLoaded', init);
 
@@ -84,7 +109,8 @@
     document.getElementById('psProfileName').textContent = name;
 
     loadDashboard();
-    loadDocuments();
+    loadVisaPanel();
+    loadDocumentsAccessState();
     loadForms();
     loadNotifications();
     loadReviews();
@@ -96,12 +122,16 @@
      Shell: nav switching, mobile drawer, bell, sign out
      ================================================================== */
   function wireShell() {
-    var navItems = document.querySelectorAll('#psNav .ps-nav-item');
+    // Only nav items with a data-panel are in-portal tabs. "Tour Packages"
+    // is a plain external link (target="_blank") — it must NOT run
+    // goToPanel(null), which would blank out whichever panel is currently
+    // showing in this tab while the new tab opens.
+    var navItems = document.querySelectorAll('#psNav .ps-nav-item[data-panel]');
     navItems.forEach(function (btn) {
-      btn.addEventListener('click', function () { goToPanel(btn.getAttribute('data-panel')); });
+      btn.addEventListener('click', function () { handleNavigateToPanel(btn.getAttribute('data-panel')); });
     });
     document.querySelectorAll('[data-goto-panel]').forEach(function (btn) {
-      btn.addEventListener('click', function () { goToPanel(btn.getAttribute('data-goto-panel')); });
+      btn.addEventListener('click', function () { handleNavigateToPanel(btn.getAttribute('data-goto-panel')); });
     });
 
     var menuBtn = document.getElementById('psMenuBtn');
@@ -155,6 +185,19 @@
     document.getElementById('psShell').classList.remove('ps-sidebar-open');
   }
 
+  function handleNavigateToPanel(panel) {
+    if (panel === 'documents' && documentsAccessState && !documentsAccessState.allowed) {
+      showDocumentsLockedTooltip(documentsAccessState.reason);
+      return;
+    }
+    goToPanel(panel);
+  }
+
+  function showDocumentsLockedTooltip(reason) {
+    var info = DOCS_LOCK_MESSAGES[reason] || DOCS_LOCK_MESSAGES.no_application;
+    showToast(info.title + ' — ' + info.desc, true);
+  }
+
   function wireModals() {
     document.querySelectorAll('[data-close-modal]').forEach(function (el) {
       el.addEventListener('click', function () { closeModal(el.getAttribute('data-close-modal')); });
@@ -181,17 +224,43 @@
 
     function resetUploadModal() { selectedFile = null; fileInput.value = ''; selectedName.textContent = ''; confirmBtn.disabled = true; confirmBtn.textContent = 'Upload'; }
     window.addEventListener('ps:modal-closed:uploadModal', resetUploadModal);
+
+    document.getElementById('psApplyVisaBtn').addEventListener('click', function () { openApplyVisaModal(); });
+    document.getElementById('dashApplyVisaBtn').addEventListener('click', function () { openApplyVisaModal(); });
+    window.addEventListener('ps:modal-closed:applyVisaModal', resetApplyVisaModal);
   }
 
   function openModal(id) {
     var modal = document.getElementById(id);
+    if (!modal) return;
+    modalReturnFocusEl = document.activeElement;
     modal.classList.add('is-open');
     modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+
+    var focusable = modal.querySelectorAll('button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])');
+    if (focusable.length) focusable[0].focus();
+
+    modalKeydownHandler = function (e) {
+      if (e.key === 'Escape') { closeModal(id); return; }
+      if (e.key !== 'Tab') return;
+      var items = modal.querySelectorAll('button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])');
+      if (!items.length) return;
+      var first = items[0], last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', modalKeydownHandler);
   }
   function closeModal(id) {
     var modal = document.getElementById(id);
+    if (!modal) return;
     modal.classList.remove('is-open');
     modal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+    if (modalKeydownHandler) { document.removeEventListener('keydown', modalKeydownHandler); modalKeydownHandler = null; }
+    if (modalReturnFocusEl && typeof modalReturnFocusEl.focus === 'function') modalReturnFocusEl.focus();
+    modalReturnFocusEl = null;
     window.dispatchEvent(new CustomEvent('ps:modal-closed:' + id));
   }
 
@@ -205,19 +274,22 @@
   }
 
   function renderTimeline(app) {
-    var el = document.getElementById('psTimeline');
-    var statuses = window.CALESTIA_APPLICATION_STATUSES || [];
+    document.getElementById('psTimeline').innerHTML = buildTimelineHTML(app);
 
+    var statuses = window.CALESTIA_APPLICATION_STATUSES || [];
     if (!app) {
-      el.innerHTML = '<p class="ps-hint">Your application will appear here once Calestia sets it up.</p>';
       document.getElementById('psBannerStatus').textContent = '—';
       document.getElementById('statDaysInProcess').textContent = '—';
       return;
     }
-
     document.getElementById('psBannerStatus').textContent = statusLabel(statuses, app.status);
     var days = app.created_at ? Math.max(0, Math.floor((Date.now() - new Date(app.created_at).getTime()) / 86400000)) : 0;
     document.getElementById('statDaysInProcess').textContent = String(days);
+  }
+
+  function buildTimelineHTML(app) {
+    var statuses = window.CALESTIA_APPLICATION_STATUSES || [];
+    if (!app) return '<p class="ps-hint">Your application will appear here once Calestia sets it up.</p>';
 
     var isDenied = app.status === 'visa_denied';
     var visible = isDenied
@@ -237,7 +309,7 @@
         (isDone ? '<p class="ps-tl-sub">Completed</p>' : isActive ? '<p class="ps-tl-sub">' + (isDenied ? 'Denied' : 'In Progress') + '</p>' : '') +
         '</div></div>';
     });
-    el.innerHTML = html;
+    return html;
   }
 
   function statusLabel(list, key) {
@@ -267,6 +339,635 @@
     var days = Math.floor(hrs / 24);
     if (days < 7) return days + 'd ago';
     return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
+  /* ==================================================================
+     Visa Assistance — applicants list + Apply-a-Visa modal
+     ================================================================== */
+  function loadVisaPanel() {
+    supabaseClient.from('applications').select('*').eq('client_id', session.user.id).maybeSingle()
+      .then(function (result) { document.getElementById('psVisaTimeline').innerHTML = buildTimelineHTML(result.data || null); })
+      .catch(function () { document.getElementById('psVisaTimeline').innerHTML = '<p class="ps-hint">Your application will appear here once Calestia sets it up.</p>'; });
+
+    loadApplyVisaApplicants().then(renderApplicantsList);
+  }
+
+  function loadApplyVisaApplicants() {
+    return supabaseClient.from('visa_applicants').select('*').eq('client_id', session.user.id).order('created_at', { ascending: true })
+      .then(function (result) { avApplicants = result.error ? [] : (result.data || []); })
+      .catch(function () { avApplicants = []; });
+  }
+
+  function renderApplicantsList() {
+    var el = document.getElementById('psApplicantsList');
+    if (!el) return;
+    if (!avApplicants.length) {
+      el.innerHTML = '<div class="ps-empty" style="padding:20px 10px;">' +
+        '<div class="ps-empty-icon">' + window.PSIcon('user-plus', 24) + '</div>' +
+        '<h3>No applicants yet</h3>' +
+        '<p>Click "Apply a Visa" to add your first traveler and start your application.</p>' +
+        '</div>';
+      return;
+    }
+    el.innerHTML = avApplicants.map(function (a, i) { return applicantCardHTML(a, i, 'panel'); }).join('');
+    el.querySelectorAll('[data-applicant-edit]').forEach(function (btn) {
+      btn.addEventListener('click', function () { openApplyVisaModal(btn.getAttribute('data-applicant-edit')); });
+    });
+    el.querySelectorAll('[data-applicant-delete]').forEach(function (btn) {
+      btn.addEventListener('click', function () { deleteApplicant(btn.getAttribute('data-applicant-delete')); });
+    });
+  }
+
+  function tierBadgeHTML(tier) {
+    var isPremium = tier === 'premium';
+    var tierDef = (window.CALESTIA_SERVICE_TIERS || []).filter(function (t) { return t.id === tier; })[0];
+    var label = tierDef ? tierDef.label : (isPremium ? 'Premium' : 'Standard');
+    return '<span class="ps-badge" style="margin-left:8px;' + (isPremium ? 'background:#FEF3C7;color:#D97706;' : 'background:#EAF0F6;color:#3B5583;') + '">' + escapeHTML(label) + '</span>';
+  }
+
+  function applicantCardHTML(a, i, mode) {
+    var editAttr = mode === 'modal' ? 'data-av-edit' : 'data-applicant-edit';
+    var deleteAttr = mode === 'modal' ? 'data-av-delete' : 'data-applicant-delete';
+    var travelDateStr = a.travel_date ? new Date(a.travel_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—';
+    return '<div class="ps-applicant-card">' +
+      '<div class="ps-applicant-card-top">' +
+      '<div><h4>Applicant ' + (i + 1) + '</h4><strong>' + escapeHTML(((a.first_name || '').toUpperCase() + ' ' + (a.last_name || '').toUpperCase()).trim() || 'Unnamed') + '</strong>' + tierBadgeHTML(a.service_tier || 'standard') + '</div>' +
+      '<div style="display:flex;gap:6px;flex-shrink:0;">' +
+      '<button type="button" class="ps-btn ps-btn-outline ps-btn-sm" ' + editAttr + '="' + a.id + '">' + window.PSIcon('edit', 13) + ' Edit</button>' +
+      '<button type="button" class="ps-btn ps-btn-danger ps-btn-sm" ' + deleteAttr + '="' + a.id + '">' + window.PSIcon('trash', 13) + ' Delete</button>' +
+      '</div></div>' +
+      '<div class="ps-applicant-card-grid">' +
+      '<div><span>Visa Type</span><strong>' + escapeHTML(a.visa_type || '—') + '</strong></div>' +
+      '<div><span>Passport Number</span><strong>' + (a.passport_number ? '••••••••' : '—') + '</strong></div>' +
+      '<div><span>Travel Date</span><strong>' + travelDateStr + '</strong></div>' +
+      '</div></div>';
+  }
+
+  function deleteApplicant(id) {
+    supabaseClient.from('visa_applicants').delete().eq('id', id).eq('client_id', session.user.id)
+      .then(function (result) {
+        if (result.error) { showToast(result.error.message || 'Could not remove applicant.', true); return; }
+        showToast('Applicant removed.');
+        loadVisaPanel();
+      })
+      .catch(function () { showToast('Something went wrong.', true); });
+  }
+
+  function emptyApplicant() { return Object.assign({}, AV_EMPTY_APPLICANT); }
+
+  function applicantRowToFormData(row) {
+    return {
+      first_name: row.first_name || '', last_name: row.last_name || '', gender: row.gender || '',
+      date_of_birth: row.date_of_birth || '', nationality: row.nationality || '',
+      passport_number: row.passport_number || '', passport_expiry: row.passport_expiry || '',
+      travel_date: row.travel_date || '', visa_type: row.visa_type || '',
+      service_tier: row.service_tier || 'standard'
+    };
+  }
+
+  function tierPrice(tierId) {
+    var pricing = window.CALESTIA_VISA_PRICING || {};
+    return pricing[tierId] || 0;
+  }
+
+  function tierBreakdown(applicants) {
+    var tiers = window.CALESTIA_SERVICE_TIERS || [];
+    var counts = {};
+    (applicants || []).forEach(function (a) {
+      var t = a.service_tier || 'standard';
+      counts[t] = (counts[t] || 0) + 1;
+    });
+    return tiers.filter(function (t) { return counts[t.id] > 0; }).map(function (t) {
+      var count = counts[t.id];
+      var price = tierPrice(t.id);
+      return { id: t.id, label: t.label, count: count, price: price, subtotal: count * price };
+    });
+  }
+
+  function visaTotalFor(applicants) {
+    return tierBreakdown(applicants).reduce(function (sum, b) { return sum + b.subtotal; }, 0);
+  }
+
+  function openApplyVisaModal(editId) {
+    avSelectedPaymentMethod = null;
+    avReceiptFile = null;
+    loadApplyVisaApplicants().then(function () {
+      if (editId) {
+        var found = avApplicants.filter(function (a) { return a.id === editId; })[0];
+        avEditingId = editId;
+        avFormData = found ? applicantRowToFormData(found) : emptyApplicant();
+        avStep = 'form';
+      } else if (avApplicants.length) {
+        avEditingId = null;
+        avFormData = emptyApplicant();
+        avStep = 'summary';
+      } else {
+        avEditingId = null;
+        avFormData = emptyApplicant();
+        avStep = 'form';
+      }
+      renderApplyVisaModal();
+      openModal('applyVisaModal');
+    });
+  }
+
+  function resetApplyVisaModal() {
+    avStep = 'form';
+    avEditingId = null;
+    avFormData = emptyApplicant();
+    avSelectedPaymentMethod = null;
+    avReceiptFile = null;
+    avLastSubmission = null;
+  }
+
+  function avEditApplicant(id) {
+    var found = avApplicants.filter(function (a) { return a.id === id; })[0];
+    avEditingId = id;
+    avFormData = found ? applicantRowToFormData(found) : emptyApplicant();
+    avStep = 'form';
+    renderApplyVisaModal();
+  }
+
+  function avDeleteApplicantInModal(id) {
+    supabaseClient.from('visa_applicants').delete().eq('id', id).eq('client_id', session.user.id)
+      .then(function (result) {
+        if (result.error) { showToast(result.error.message || 'Could not remove applicant.', true); return; }
+        return loadApplyVisaApplicants();
+      })
+      .then(function () {
+        renderApplyVisaModal();
+        renderApplicantsList();
+      })
+      .catch(function () { showToast('Something went wrong.', true); });
+  }
+
+  function readApplicantFormFields() {
+    var keys = ['first_name', 'last_name', 'gender', 'date_of_birth', 'nationality', 'passport_number', 'passport_expiry', 'travel_date', 'visa_type'];
+    var data = {};
+    keys.forEach(function (k) {
+      var el = document.getElementById('avField_' + k);
+      data[k] = el ? el.value.trim() : '';
+    });
+    ['date_of_birth', 'passport_expiry', 'travel_date'].forEach(function (k) { if (!data[k]) data[k] = null; });
+    return data;
+  }
+
+  function handleApplicantSave() {
+    var data = readApplicantFormFields();
+    data.service_tier = (avFormData && avFormData.service_tier) || 'standard';
+    if (!data.first_name || !data.last_name || !data.passport_number || !data.travel_date || !data.visa_type) {
+      showToast('Please fill in first name, last name, passport number, travel date, and visa type.', true);
+      return;
+    }
+    var btn = document.getElementById('avSaveApplicantBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+    var op = avEditingId
+      ? supabaseClient.from('visa_applicants').update(data).eq('id', avEditingId).eq('client_id', session.user.id)
+      : supabaseClient.from('visa_applicants').insert(Object.assign({ client_id: session.user.id }, data));
+
+    op.then(function (result) {
+      if (result.error) throw result.error;
+      avEditingId = null;
+      avStep = 'summary';
+      return loadApplyVisaApplicants();
+    }).then(function () {
+      renderApplyVisaModal();
+      renderApplicantsList();
+    }).catch(function (err) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Save & Continue'; }
+      showToast((err && err.message) || 'Could not save applicant.', true);
+    });
+  }
+
+  function handlePaymentSubmit() {
+    if (!avSelectedPaymentMethod || !avReceiptFile) return;
+    var btn = document.getElementById('avSubmitPaymentBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Submitting…'; }
+
+    var clientId = session.user.id;
+    var total = visaTotalFor(avApplicants);
+    var path = clientId + '/' + Date.now() + '-' + avReceiptFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+
+    supabaseClient.storage.from('payment-receipts').upload(path, avReceiptFile, { upsert: false })
+      .then(function (uploadResult) {
+        if (uploadResult.error) throw uploadResult.error;
+        return supabaseClient.from('payment_submissions').insert({
+          client_id: clientId,
+          method: avSelectedPaymentMethod,
+          applicant_count: avApplicants.length || 1,
+          amount: total,
+          receipt_path: path,
+          receipt_file_name: avReceiptFile.name
+        }).select().maybeSingle();
+      })
+      .then(function (result) {
+        if (result.error) throw result.error;
+        avLastSubmission = { amount: total, applicantCount: avApplicants.length || 1, method: avSelectedPaymentMethod };
+        avStep = 'confirmation';
+        renderApplyVisaModal();
+        loadVisaPanel();
+        loadDocumentsAccessState();
+      })
+      .catch(function (err) {
+        if (btn) { btn.disabled = false; btn.textContent = 'Submit Payment'; }
+        showToast((err && err.message) || 'Could not submit payment. Please try again.', true);
+      });
+  }
+
+  /* -- Apply-a-Visa modal: step rendering -- */
+
+  var AV_STEPS = [
+    { key: 'form', label: 'Applicant Details' },
+    { key: 'summary', label: 'Your Details' },
+    { key: 'payment', label: 'Payment' },
+    { key: 'confirmation', label: 'Confirmation' }
+  ];
+
+  function avStepperHTML() {
+    var currentIdx = AV_STEPS.map(function (s) { return s.key; }).indexOf(avStep);
+    var display = AV_STEPS.slice(1);
+    var html = '<div class="ps-stepper">';
+    display.forEach(function (s, i) {
+      var idx = i + 1;
+      var done = currentIdx > idx;
+      var active = currentIdx === idx;
+      html += '<div class="ps-stepper-step">' +
+        '<div class="ps-stepper-dot' + (done ? ' is-done' : '') + (active ? ' is-active' : '') + '">' + (done ? '✓' : idx) + '</div>' +
+        '<span class="ps-stepper-label' + (active || done ? ' is-current' : '') + '">' + escapeHTML(s.label) + '</span>' +
+        '</div>';
+      if (i < display.length - 1) html += '<div class="ps-stepper-line' + (done ? ' is-done' : '') + '"></div>';
+    });
+    html += '</div>';
+    return html;
+  }
+
+  function avTierSelectorHTML(selectedTier) {
+    var tiers = window.CALESTIA_SERVICE_TIERS || [];
+    var cardsHTML = tiers.map(function (t) {
+      var active = selectedTier === t.id;
+      return '<button type="button" class="ps-payment-method' + (active ? ' is-active' : '') + '" data-tier-select="' + t.id + '" style="position:relative;">' +
+        (t.badge ? '<span class="ps-badge ps-badge-amber" style="position:absolute;top:12px;right:12px;">' + escapeHTML(t.badge) + '</span>' : '') +
+        '<div class="ps-payment-method-title">' + escapeHTML(t.label) + '</div>' +
+        '<div style="font-size:0.95rem;font-weight:700;color:var(--navy-dk);margin:4px 0;">₱' + t.price.toLocaleString() + ' <span style="font-size:0.7rem;font-weight:500;color:var(--ps-text-dim);">/ applicant</span></div>' +
+        '<div class="ps-payment-method-desc">' + escapeHTML(t.description) + '</div>' +
+        '</button>';
+    }).join('');
+    return '<div style="margin-bottom:18px;">' +
+      '<label style="display:block;font-size:0.7rem;font-weight:700;color:var(--ps-text-dim);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">Service Tier *</label>' +
+      '<div class="ps-payment-methods" style="grid-template-columns:repeat(2,1fr);">' + cardsHTML + '</div>' +
+      '</div>';
+  }
+
+  function avFormStepHTML() {
+    var data = avFormData || emptyApplicant();
+    var fields = [
+      { key: 'first_name', label: 'First Name', type: 'text' },
+      { key: 'last_name', label: 'Last Name', type: 'text' },
+      { key: 'gender', label: 'Gender', options: ['Male', 'Female', 'Other'] },
+      { key: 'date_of_birth', label: 'Date of Birth', type: 'date' },
+      { key: 'nationality', label: 'Current Nationality', type: 'text' },
+      { key: 'passport_number', label: 'Passport Number', type: 'text' },
+      { key: 'passport_expiry', label: 'Passport Expiry Date', type: 'date' },
+      { key: 'travel_date', label: 'Travel Date', type: 'date' },
+      { key: 'visa_type', label: 'Type of Visa', options: window.CALESTIA_VISA_TYPES, full: true }
+    ];
+    var applicantNumber = avEditingId
+      ? (avApplicants.map(function (a) { return a.id; }).indexOf(avEditingId) + 1) || (avApplicants.length + 1)
+      : (avApplicants.length + 1);
+
+    var fieldsHTML = fields.map(function (f) {
+      var val = data[f.key] || '';
+      var input = f.options
+        ? '<select id="avField_' + f.key + '"><option value="">Select ' + escapeHTML(f.label) + '</option>' +
+          f.options.map(function (o) { return '<option value="' + escapeHTML(o) + '"' + (o === val ? ' selected' : '') + '>' + escapeHTML(o) + '</option>'; }).join('') +
+          '</select>'
+        : '<input type="' + f.type + '" id="avField_' + f.key + '" value="' + escapeHTML(val) + '" />';
+      return '<div class="form-group"' + (f.full ? ' style="grid-column:1/-1;"' : '') + '><label>' + escapeHTML(f.label) + ' *</label>' + input + '</div>';
+    }).join('');
+
+    return (
+      avTierSelectorHTML(data.service_tier || 'standard') +
+      '<div style="margin-bottom:18px;padding:14px 16px;border-radius:14px;background:#fff7ed;border:1px solid #fed7aa;display:flex;gap:10px;">' +
+      window.PSIcon('alert-circle', 18, 'style="color:#d97706;flex-shrink:0;margin-top:1px;"') +
+      '<div><strong style="display:block;font-size:0.8rem;font-weight:700;color:#92400e;margin-bottom:2px;">IMPORTANT</strong>' +
+      '<span style="font-size:0.78rem;color:#b45309;line-height:1.5;">Please enter the information exactly as it appears on the photo page of your passport. We may be unable to process your application if the details do not match.</span></div>' +
+      '</div>' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">' +
+      '<div class="ps-avatar ps-avatar-sm">' + applicantNumber + '</div>' +
+      '<span style="font-weight:600;color:var(--navy-dk);font-size:0.86rem;">Applicant ' + applicantNumber + '</span>' +
+      '</div>' +
+      '<div class="ps-grid ps-grid-2">' + fieldsHTML + '</div>' +
+      '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:22px;padding-top:18px;border-top:1px solid var(--ps-border);">' +
+      '<button type="button" class="ps-btn ps-btn-outline" id="avCancelBtn">Cancel</button>' +
+      '<button type="button" class="ps-btn ps-btn-primary" id="avSaveApplicantBtn">Save &amp; Continue</button>' +
+      '</div>'
+    );
+  }
+
+  function avSummaryStepHTML() {
+    var cardsHTML = avApplicants.map(function (a, i) { return applicantCardHTML(a, i, 'modal'); }).join('');
+    return avStepperHTML() +
+      '<div style="display:flex;flex-direction:column;gap:12px;margin-bottom:18px;">' + (cardsHTML || '<p class="ps-hint">No applicants added yet.</p>') + '</div>' +
+      '<button type="button" class="ps-btn ps-btn-outline" id="avAddApplicantBtn" style="width:100%;justify-content:center;border-style:dashed;">' + window.PSIcon('plus', 15) + ' Add Applicant</button>' +
+      '<div style="display:flex;justify-content:space-between;gap:10px;margin-top:22px;padding-top:18px;border-top:1px solid var(--ps-border);">' +
+      '<button type="button" class="ps-btn ps-btn-outline" id="avCloseBtn">Go Back</button>' +
+      '<button type="button" class="ps-btn ps-btn-primary" id="avToPaymentBtn"' + (avApplicants.length ? '' : ' disabled') + '>Continue to Payment</button>' +
+      '</div>';
+  }
+
+  function avPaymentStepHTML() {
+    var methods = window.CALESTIA_PAYMENT_METHODS || [];
+    var breakdown = tierBreakdown(avApplicants);
+    var total = visaTotalFor(avApplicants);
+
+    var methodsHTML = methods.map(function (m) {
+      var active = avSelectedPaymentMethod === m.key;
+      return '<button type="button" class="ps-payment-method' + (active ? ' is-active' : '') + '" data-payment-method="' + m.key + '">' +
+        '<div class="ps-payment-method-title">' + escapeHTML(m.label) + '</div>' +
+        '<div class="ps-payment-method-desc">' + escapeHTML(m.description) + '</div>' +
+        '</button>';
+    }).join('');
+
+    var selectedMethod = methods.filter(function (m) { return m.key === avSelectedPaymentMethod; })[0];
+    var detailHTML = '';
+    if (selectedMethod) {
+      detailHTML = '<div class="ps-payment-detail-card">' +
+        '<div class="ps-payment-detail-row"><span class="ps-hint">Account Name</span><strong class="ps-payment-detail-value">' + escapeHTML(selectedMethod.accountName) + '</strong></div>' +
+        '<div class="ps-payment-detail-row"><span class="ps-hint">' + (selectedMethod.key === 'bank' ? 'Account Number' : 'Mobile Number') + '</span>' +
+        '<span style="display:flex;align-items:center;gap:8px;"><strong class="ps-payment-detail-value">' + escapeHTML(selectedMethod.accountNumber) + '</strong>' +
+        '<button type="button" class="ps-btn ps-btn-outline ps-btn-sm" id="avCopyAccountBtn" data-copy-value="' + escapeHTML(selectedMethod.accountNumber) + '">Copy</button></span></div>' +
+        '<p class="ps-hint" style="margin-top:8px;">Send exactly <strong style="color:var(--navy-dk);">₱' + total.toLocaleString() + '</strong>, then upload your receipt below.</p>' +
+        '</div>';
+    }
+
+    var receiptHTML = avReceiptFile
+      ? '<div class="ps-doc-file-chip" style="margin-top:12px;">' + window.PSIcon('file-text', 14) + '<span>' + escapeHTML(avReceiptFile.name) + '</span>' +
+        '<button type="button" class="ps-btn ps-btn-outline ps-btn-sm" id="avRemoveReceiptBtn" style="margin-left:auto;">Remove</button></div>'
+      : '<div class="ps-dropzone" id="avDropzone" style="margin-top:12px;">' +
+        window.PSIcon('upload', 22) +
+        '<p style="font-weight:600;color:var(--navy-dk);margin:8px 0 2px;">Click to upload your payment receipt</p>' +
+        '<p class="ps-hint">PDF, JPG, JPEG, PNG · Max 10&nbsp;MB</p>' +
+        '</div>' +
+        '<input type="file" id="avReceiptInput" accept=".pdf,.jpg,.jpeg,.png" style="display:none;" />';
+
+    return avStepperHTML() +
+      '<h3 style="font-size:0.95rem;font-weight:700;color:var(--navy-dk);margin-bottom:4px;">Select Payment Method</h3>' +
+      '<p class="ps-hint" style="margin-bottom:14px;">Choose how you\'d like to pay.</p>' +
+      '<div class="ps-payment-methods">' + methodsHTML + '</div>' +
+      detailHTML +
+      '<div style="margin-top:20px;">' +
+      '<h3 style="font-size:0.95rem;font-weight:700;color:var(--navy-dk);margin-bottom:4px;">Upload Proof of Payment</h3>' +
+      '<p class="ps-hint" style="margin-bottom:8px;">Your application proceeds to review once our team verifies your payment.</p>' +
+      receiptHTML +
+      '</div>' +
+      '<div class="ps-card ps-card-pad" style="margin-top:18px;background:var(--ps-bg);">' +
+      breakdown.map(function (b) {
+        return '<div style="display:flex;justify-content:space-between;font-size:0.82rem;color:var(--ps-text-dim);margin-bottom:4px;"><span>' + b.count + ' × ' + escapeHTML(b.label) + '</span><span>₱' + b.subtotal.toLocaleString() + '</span></div>';
+      }).join('') +
+      '<div style="display:flex;justify-content:space-between;font-size:1rem;font-weight:700;color:var(--navy-dk);padding-top:8px;margin-top:4px;border-top:1px solid var(--ps-border);"><span>Total Amount</span><span>₱' + total.toLocaleString() + '</span></div>' +
+      '</div>' +
+      '<div style="display:flex;justify-content:space-between;gap:10px;margin-top:22px;padding-top:18px;border-top:1px solid var(--ps-border);">' +
+      '<button type="button" class="ps-btn ps-btn-outline" id="avBackToSummaryBtn">Go Back</button>' +
+      '<button type="button" class="ps-btn ps-btn-primary" id="avSubmitPaymentBtn"' + (avSelectedPaymentMethod && avReceiptFile ? '' : ' disabled') + '>Submit Payment</button>' +
+      '</div>';
+  }
+
+  function avConfirmationStepHTML() {
+    var sub = avLastSubmission || {};
+    return '<div style="text-align:center;padding:10px 0 4px;">' +
+      '<div style="width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;background:linear-gradient(135deg, var(--navy), var(--navy-dk));color:#fff;">' + window.PSIcon('check-circle', 30) + '</div>' +
+      '<h3 style="font-size:1.2rem;font-weight:700;color:var(--navy-dk);margin-bottom:8px;">Payment Submitted</h3>' +
+      '<p class="ps-hint" style="max-width:380px;margin:0 auto 20px;line-height:1.6;">Thank you for choosing Calestia Travel &amp; Tours. Our team will verify your payment and you\'ll get a notification once it\'s confirmed — typically within 1–2 business hours.</p>' +
+      '<div class="ps-card ps-card-pad" style="text-align:left;background:var(--ps-bg);max-width:420px;margin:0 auto 22px;">' +
+      '<div class="ps-applicant-card-grid" style="grid-template-columns:repeat(2,1fr);">' +
+      '<div><span>Applicants</span><strong>' + (sub.applicantCount || avApplicants.length || 1) + '</strong></div>' +
+      '<div><span>Amount Submitted</span><strong>₱' + (sub.amount || 0).toLocaleString() + '</strong></div>' +
+      '<div><span>Payment Method</span><strong>' + escapeHTML((sub.method || '').toUpperCase()) + '</strong></div>' +
+      '<div><span>Status</span><strong style="color:#b45309;">Pending Verification</strong></div>' +
+      '</div></div>' +
+      '<div style="display:flex;gap:10px;justify-content:center;">' +
+      '<button type="button" class="ps-btn ps-btn-outline" id="avViewApplicationBtn">View My Application</button>' +
+      '<button type="button" class="ps-btn ps-btn-primary" id="avReturnDashboardBtn">Return to Dashboard</button>' +
+      '</div></div>';
+  }
+
+  function renderApplyVisaModal() {
+    var titleEl = document.getElementById('avModalTitle');
+    var subtitleEl = document.getElementById('avModalSubtitle');
+    if (avStep === 'confirmation') {
+      titleEl.textContent = 'Application Submitted!';
+      subtitleEl.classList.add('is-hidden');
+    } else {
+      titleEl.textContent = 'Apply for a Visa';
+      subtitleEl.textContent = 'Complete the fields exactly as they appear on your passport.';
+      subtitleEl.classList.remove('is-hidden');
+    }
+
+    var bodyHTML = '';
+    if (avStep === 'form') bodyHTML = avFormStepHTML();
+    else if (avStep === 'summary') bodyHTML = avSummaryStepHTML();
+    else if (avStep === 'payment') bodyHTML = avPaymentStepHTML();
+    else if (avStep === 'confirmation') bodyHTML = avConfirmationStepHTML();
+
+    document.getElementById('avModalBody').innerHTML = bodyHTML;
+    wireApplyVisaStepEvents();
+  }
+
+  function wireApplyVisaStepEvents() {
+    var cancelBtn = document.getElementById('avCancelBtn');
+    if (cancelBtn) cancelBtn.addEventListener('click', function () {
+      if (avApplicants.length) { avStep = 'summary'; renderApplyVisaModal(); }
+      else closeModal('applyVisaModal');
+    });
+
+    var saveBtn = document.getElementById('avSaveApplicantBtn');
+    if (saveBtn) saveBtn.addEventListener('click', handleApplicantSave);
+
+    document.querySelectorAll('[data-tier-select]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        // Capture whatever the client already typed before re-rendering the
+        // step for the new tier selection, so their in-progress input isn't
+        // wiped by the innerHTML swap.
+        avFormData = Object.assign({}, avFormData, readApplicantFormFields());
+        avFormData.service_tier = btn.getAttribute('data-tier-select');
+        renderApplyVisaModal();
+      });
+    });
+
+    var addBtn = document.getElementById('avAddApplicantBtn');
+    if (addBtn) addBtn.addEventListener('click', function () {
+      avEditingId = null;
+      avFormData = emptyApplicant();
+      avStep = 'form';
+      renderApplyVisaModal();
+    });
+
+    var closeBtn = document.getElementById('avCloseBtn');
+    if (closeBtn) closeBtn.addEventListener('click', function () { closeModal('applyVisaModal'); });
+
+    var toPaymentBtn = document.getElementById('avToPaymentBtn');
+    if (toPaymentBtn) toPaymentBtn.addEventListener('click', function () {
+      if (!avApplicants.length) return;
+      avStep = 'payment';
+      renderApplyVisaModal();
+    });
+
+    var backToSummaryBtn = document.getElementById('avBackToSummaryBtn');
+    if (backToSummaryBtn) backToSummaryBtn.addEventListener('click', function () { avStep = 'summary'; renderApplyVisaModal(); });
+
+    document.querySelectorAll('[data-payment-method]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        avSelectedPaymentMethod = btn.getAttribute('data-payment-method');
+        renderApplyVisaModal();
+      });
+    });
+
+    var copyBtn = document.getElementById('avCopyAccountBtn');
+    if (copyBtn) copyBtn.addEventListener('click', function () {
+      var value = copyBtn.getAttribute('data-copy-value');
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(value).then(function () { showToast('Copied to clipboard.'); }).catch(function () {});
+      }
+    });
+
+    var dropzone = document.getElementById('avDropzone');
+    var receiptInput = document.getElementById('avReceiptInput');
+    if (dropzone && receiptInput) {
+      dropzone.addEventListener('click', function () { receiptInput.click(); });
+      receiptInput.addEventListener('change', function () {
+        var file = receiptInput.files && receiptInput.files[0];
+        if (file) { avReceiptFile = file; renderApplyVisaModal(); }
+      });
+    }
+    var removeReceiptBtn = document.getElementById('avRemoveReceiptBtn');
+    if (removeReceiptBtn) removeReceiptBtn.addEventListener('click', function () { avReceiptFile = null; renderApplyVisaModal(); });
+
+    var submitPaymentBtn = document.getElementById('avSubmitPaymentBtn');
+    if (submitPaymentBtn) submitPaymentBtn.addEventListener('click', handlePaymentSubmit);
+
+    document.querySelectorAll('[data-av-edit]').forEach(function (btn) {
+      btn.addEventListener('click', function () { avEditApplicant(btn.getAttribute('data-av-edit')); });
+    });
+    document.querySelectorAll('[data-av-delete]').forEach(function (btn) {
+      btn.addEventListener('click', function () { avDeleteApplicantInModal(btn.getAttribute('data-av-delete')); });
+    });
+
+    var viewAppBtn = document.getElementById('avViewApplicationBtn');
+    if (viewAppBtn) viewAppBtn.addEventListener('click', function () { closeModal('applyVisaModal'); });
+
+    var returnDashBtn = document.getElementById('avReturnDashboardBtn');
+    if (returnDashBtn) returnDashBtn.addEventListener('click', function () { closeModal('applyVisaModal'); goToPanel('dashboard'); });
+  }
+
+  /* ==================================================================
+     Documents access gating — locked until an application has a
+     staff-verified payment
+     ================================================================== */
+  function getDocumentsAccessState(clientId) {
+    return Promise.all([
+      supabaseClient.from('visa_applicants').select('id', { count: 'exact', head: true }).eq('client_id', clientId),
+      supabaseClient.from('payment_submissions').select('*').eq('client_id', clientId).order('submitted_at', { ascending: false }).limit(1)
+    ]).then(function (results) {
+      var applicantCount = results[0].count || 0;
+      var latestPayment = (results[1].data && results[1].data[0]) || null;
+
+      if (!applicantCount) return { allowed: false, reason: 'no_application' };
+      if (!latestPayment) return { allowed: false, reason: 'no_payment' };
+      if (latestPayment.status === 'verified') return { allowed: true };
+      if (latestPayment.status === 'rejected') return { allowed: false, reason: 'payment_rejected' };
+      return { allowed: false, reason: 'awaiting_verification' };
+    }).catch(function () {
+      return { allowed: false, reason: 'no_application' };
+    });
+  }
+
+  function loadDocumentsAccessState() {
+    return getDocumentsAccessState(session.user.id).then(function (state) {
+      documentsAccessState = state;
+      renderDocumentsNavLockState();
+      renderDocumentsPanel();
+      return state;
+    });
+  }
+
+  function renderDocumentsNavLockState() {
+    var navBtn = document.querySelector('#psNav .ps-nav-item[data-panel="documents"]');
+    if (!navBtn) return;
+    var locked = documentsAccessState && !documentsAccessState.allowed;
+    navBtn.classList.toggle('ps-nav-item-locked', locked);
+    navBtn.setAttribute('aria-disabled', locked ? 'true' : 'false');
+
+    var badge = document.getElementById('psNavDocsBadge');
+    if (locked && badge) badge.classList.add('is-hidden');
+
+    var lockIcon = navBtn.querySelector('.ps-nav-lock-icon');
+    if (locked && !lockIcon) {
+      var span = document.createElement('span');
+      span.className = 'ps-nav-lock-icon';
+      span.innerHTML = window.PSIcon('lock', 13);
+      navBtn.appendChild(span);
+    } else if (!locked && lockIcon) {
+      lockIcon.remove();
+    }
+  }
+
+  function renderDocumentsPanel() {
+    if (!documentsAccessState) return;
+    if (documentsAccessState.allowed) loadDocuments();
+    else renderDocumentsLockedState(documentsAccessState.reason);
+  }
+
+  function renderDocumentsLockedState(reason) {
+    var info = DOCS_LOCK_MESSAGES[reason] || DOCS_LOCK_MESSAGES.no_application;
+    var grid = document.getElementById('psDocumentsGrid');
+    if (!grid) return;
+
+    var ctaHTML = info.cta ? '<button type="button" class="ps-btn ps-btn-primary" id="psDocsLockedCtaBtn">' + escapeHTML(info.cta) + '</button>' : '';
+
+    grid.innerHTML =
+      '<div class="ps-empty" style="grid-column:1/-1;">' +
+      '<div class="ps-empty-icon" style="position:relative;">' + window.PSIcon('file-text', 26) +
+      '<span style="position:absolute;bottom:-2px;right:-2px;width:20px;height:20px;border-radius:50%;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;">' + window.PSIcon('lock', 11) + '</span>' +
+      '</div>' +
+      '<h3>' + escapeHTML(info.title) + '</h3>' +
+      '<p>' + escapeHTML(info.desc) + '</p>' +
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;">' +
+      ctaHTML +
+      '<button type="button" class="ps-btn ps-btn-outline" id="psDocsRefreshStatusBtn">Refresh Status</button>' +
+      '</div>' +
+      '</div>';
+
+    var ctaBtn = document.getElementById('psDocsLockedCtaBtn');
+    if (ctaBtn) ctaBtn.addEventListener('click', function () {
+      if (reason === 'no_application') openApplyVisaModal();
+      else openApplyVisaModalAtPayment();
+    });
+
+    var refreshBtn = document.getElementById('psDocsRefreshStatusBtn');
+    refreshBtn.addEventListener('click', function () {
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = 'Refreshing…';
+      loadDocumentsAccessState().then(function (state) {
+        if (state.allowed) { showToast('Documents unlocked!'); return; }
+        refreshBtn.disabled = false;
+        refreshBtn.textContent = 'Refresh Status';
+        var stillInfo = DOCS_LOCK_MESSAGES[state.reason] || DOCS_LOCK_MESSAGES.no_application;
+        showToast('Still locked — ' + stillInfo.title);
+      });
+    });
+  }
+
+  function openApplyVisaModalAtPayment() {
+    avSelectedPaymentMethod = null;
+    avReceiptFile = null;
+    loadApplyVisaApplicants().then(function () {
+      avEditingId = null;
+      avFormData = emptyApplicant();
+      avStep = avApplicants.length ? 'payment' : 'form';
+      renderApplyVisaModal();
+      openModal('applyVisaModal');
+    });
   }
 
   /* ==================================================================
@@ -636,9 +1337,11 @@
   function subscribeRealtime() {
     var clientId = session.user.id;
     supabaseClient.channel('client-portal-' + clientId)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'documents', filter: 'client_id=eq.' + clientId }, loadDocuments)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'applications', filter: 'client_id=eq.' + clientId }, loadDashboard)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'documents', filter: 'client_id=eq.' + clientId }, function () { if (documentsAccessState && documentsAccessState.allowed) loadDocuments(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'applications', filter: 'client_id=eq.' + clientId }, function () { loadDashboard(); loadVisaPanel(); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: 'client_id=eq.' + clientId }, loadNotifications)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'visa_applicants', filter: 'client_id=eq.' + clientId }, function () { loadVisaPanel(); loadDocumentsAccessState(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payment_submissions', filter: 'client_id=eq.' + clientId }, function () { loadVisaPanel(); loadDocumentsAccessState(); })
       .subscribe();
   }
 

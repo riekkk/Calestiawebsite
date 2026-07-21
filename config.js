@@ -101,6 +101,64 @@ window.CALESTIA_FORMS = [
 ];
 
 /* ==========================================================================
+   Visa Assistance — "Apply a Visa" flow (Client Portal). Pricing is a plain
+   editable constant on purpose: change it here, nothing else needs to know.
+   ========================================================================== */
+window.CALESTIA_VISA_TYPES = [
+  'Japan Tourist Visa (Single Entry)',
+  'Japan Tourist Visa (Multiple Entry)',
+  'Japan Business Visa',
+  'Japan Visiting Relatives',
+  'Japan Visiting Friends',
+  'Others'
+];
+
+window.CALESTIA_VISA_PRICING = {
+  standard: 2700,
+  premium: 7200
+};
+
+window.CALESTIA_SERVICE_TIERS = [
+  {
+    id: 'standard',
+    label: 'Standard',
+    price: 2700,
+    description: 'Standard visa assistance — document review, submission, and status updates.'
+  },
+  {
+    id: 'premium',
+    label: 'Premium',
+    price: 7200,
+    description: 'Priority handling — dedicated specialist, expedited review, and 24/7 support.',
+    badge: 'Recommended'
+  }
+];
+
+window.CALESTIA_PAYMENT_METHODS = [
+  {
+    key: 'gcash',
+    label: 'GCash',
+    description: 'Send payment via GCash, then upload your receipt below.',
+    accountName: 'PR***E KI*R W** V.',
+    accountNumber: '0960 304 1887'
+  },
+  {
+    key: 'maya',
+    label: 'Maya',
+    description: 'Send payment via Maya, then upload your receipt below.',
+    accountName: 'Richard Valenzuela',
+    accountNumber: '0991 150 9724'
+  },
+  {
+    key: 'bank',
+    label: 'Bank Transfer (GoTyme)',
+    description: 'Transfer directly to our GoTyme bank account.',
+    accountName: 'Prince Kier Win Valenzuela',
+    accountNumber: '0107 4487 8867'
+  }
+];
+
+/* ==========================================================================
    Role → portal file map. Used after sign-in / password reset to land each
    account on the right portal, and by each portal's own gate to bounce a
    signed-in visitor of the wrong role to where they actually belong.

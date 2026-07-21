@@ -567,3 +567,64 @@ html.ps-html, body.ps-body {
   .ps-banner { padding: 18px; }
   .ps-doc-actions .ps-btn { flex: 1 1 100%; }
 }
+
+
+/* ==========================================================================
+   14. Apply-a-Visa flow — step indicator, applicant cards, payment methods
+   ========================================================================== */
+.ps-stepper { display: flex; align-items: center; gap: 0; padding: 18px 24px 0; }
+.ps-stepper-step { display: flex; align-items: center; flex: 1; }
+.ps-stepper-dot {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.72rem; font-weight: 700;
+  background: var(--ps-border); color: var(--ps-text-dim);
+}
+.ps-stepper-dot.is-done { background: var(--navy); color: var(--white); }
+.ps-stepper-dot.is-active { background: var(--sky-lt); color: var(--navy); border: 2px solid var(--navy); }
+.ps-stepper-label { margin-left: 8px; font-size: 0.76rem; font-weight: 600; color: var(--ps-text-dim); white-space: nowrap; }
+.ps-stepper-label.is-current { color: var(--navy-dk); }
+.ps-stepper-line { flex: 1; height: 1px; background: var(--ps-border); margin: 0 12px; }
+.ps-stepper-line.is-done { background: var(--navy); }
+
+.ps-applicant-card {
+  border: 1px solid var(--ps-border); border-radius: 16px; padding: 16px;
+  background: var(--ps-bg);
+}
+.ps-applicant-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.ps-applicant-card-top h4 { font-size: 0.7rem; font-weight: 700; color: var(--ps-text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+.ps-applicant-card-top strong { display: block; font-size: 0.95rem; font-weight: 700; color: var(--navy-dk); margin-top: 2px; }
+.ps-applicant-card-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.ps-applicant-card-grid span { display: block; font-size: 0.7rem; color: var(--ps-text-dim); }
+.ps-applicant-card-grid strong { display: block; font-size: 0.82rem; font-weight: 600; color: var(--navy-dk); margin-top: 1px; }
+@media (max-width: 640px) { .ps-applicant-card-grid { grid-template-columns: 1fr 1fr; } }
+
+.ps-payment-methods { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+@media (max-width: 640px) { .ps-payment-methods { grid-template-columns: 1fr; } }
+.ps-payment-method {
+  text-align: left; padding: 14px; border-radius: 16px; cursor: pointer;
+  border: 2px solid var(--ps-border); background: var(--white);
+  font-family: inherit; transition: border-color 0.15s, background 0.15s;
+}
+.ps-payment-method.is-active { border-color: var(--navy); background: var(--sky-lt); }
+.ps-payment-method-title { font-size: 0.88rem; font-weight: 700; color: var(--navy-dk); margin-bottom: 4px; }
+.ps-payment-method-desc { font-size: 0.76rem; color: var(--ps-text-dim); line-height: 1.4; }
+.ps-payment-detail-card {
+  margin-top: 14px; border-radius: 16px; padding: 16px 18px;
+  background: var(--sky-lt); border: 1px solid #dbe9f7;
+}
+.ps-payment-detail-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; }
+.ps-payment-detail-row span.ps-hint { flex-shrink: 0; }
+.ps-payment-detail-value { font-size: 0.95rem; font-weight: 700; color: var(--navy-dk); letter-spacing: 0.02em; }
+
+.ps-dropzone {
+  border: 2px dashed #dbe9f7; background: var(--sky-lt); border-radius: 18px;
+  padding: 32px 20px; text-align: center; cursor: pointer;
+}
+
+
+/* ==========================================================================
+   15. Locked sidebar item (My Documents gated behind a verified payment)
+   ========================================================================== */
+.ps-nav-item-locked { opacity: 0.5; }
+.ps-nav-lock-icon { margin-left: auto; flex-shrink: 0; display: flex; }
